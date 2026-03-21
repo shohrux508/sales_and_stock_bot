@@ -5,8 +5,11 @@ from app.container import Container
 
 from app.services.product_service import ProductService
 from app.services.transaction_service import TransactionService
+from app.services.category_service import CategoryService
+
 from app.telegram.states.worker import SellState
-from app.telegram.keyboards.worker import main_worker_kb, sell_product_list_kb, cancel_worker_kb
+from app.telegram.keyboards.worker import main_worker_kb, sell_product_list_kb, cancel_worker_kb, worker_categories_kb
+from app.telegram.keyboards.admin import undo_tx_kb
 from app.config import settings
 
 router = Router()
@@ -15,8 +18,8 @@ router = Router()
 # Let's say WORKER can access this. Wait, can ADMIN also sell? Usually yes. 
 # So we just filter for db_user is not None. 
 # For now, let's allow everyone to do this (since admin might want to test the checkout)
-router.message.filter(lambda msg, db_user: db_user is not None)
-router.callback_query.filter(lambda call, db_user: db_user is not None)
+router.message.filter(lambda event, db_user=None: db_user is not None)
+router.callback_query.filter(lambda event, db_user=None: db_user is not None)
 
 @router.message(F.text == "/start")
 async def worker_start(message: types.Message, db_user: User):
@@ -37,18 +40,42 @@ async def cancel_sale_cb(call: types.CallbackQuery, state: FSMContext):
 
 # --- Sell Logic ---
 @router.message(F.text == "🛒 Оформить продажу")
-async def start_sell(message: types.Message, container: Container):
-    product_service: ProductService = container.get("product_service")
-    products = await product_service.get_all_products()
+async def start_sell(message: types.Message, container: Container, state: FSMContext):
+    category_service: CategoryService = container.get("category_service")
+    categories = await category_service.get_all_categories()
     
-    # Filter out products with 0 stock
+    if not categories:
+        await message.answer("Категорий пока нет. Продажи недоступны.")
+        return
+        
+    await state.set_state(SellState.category_id)
+    await message.answer("Выберите категорию:", reply_markup=worker_categories_kb(categories))
+
+@router.callback_query(SellState.category_id, F.data.startswith("w_cat_"))
+async def process_sell_cat(call: types.CallbackQuery, state: FSMContext, container: Container):
+    cat_id = int(call.data.split("_")[2])
+    await state.update_data(category_id=cat_id)
+    
+    product_service: ProductService = container.get("product_service")
+    products = await product_service.get_products_by_category(cat_id)
+    
     available_products = [p for p in products if p.quantity > 0]
     
     if not available_products:
-        await message.answer("Все товары распроданы или склад пуст.")
+        await call.answer("В этой категории нет доступных товаров.", show_alert=True)
         return
         
-    await message.answer("Выберите товар для продажи:", reply_markup=sell_product_list_kb(products))
+    await state.set_state(SellState.product_id)
+    await call.message.edit_text("Выберите товар для продажи:", reply_markup=sell_product_list_kb(available_products))
+
+@router.callback_query(F.data == "back_to_w_cats")
+async def process_back_to_w_cats(call: types.CallbackQuery, state: FSMContext, container: Container):
+    from app.services.category_service import CategoryService
+    from app.telegram.keyboards.worker import worker_categories_kb
+    category_service: CategoryService = container.get("category_service")
+    categories = await category_service.get_all_categories()
+    await state.set_state(SellState.category_id)
+    await call.message.edit_text("Выберите категорию:", reply_markup=worker_categories_kb(categories))
 
 @router.callback_query(F.data.startswith("sell_"))
 async def process_sell_product(call: types.CallbackQuery, state: FSMContext, container: Container):
@@ -114,7 +141,7 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
         alert_text += f"\n\n⚠️ *Critical Stock Alert*\nОстаток {product_name} критически мал: {product_after_sale.quantity} шт!"
         
     try:
-        await bot.send_message(settings.ADMIN_ID, alert_text, parse_mode="Markdown")
+        await bot.send_message(settings.ADMIN_ID, alert_text, parse_mode="Markdown", reply_markup=undo_tx_kb(transaction.id))
     except Exception as e:
         pass # Admin might not have started the bot, ignore for MVP
 

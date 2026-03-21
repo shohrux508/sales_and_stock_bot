@@ -8,6 +8,14 @@ def main_worker_kb() -> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+def worker_categories_kb(categories) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for cat in categories:
+        builder.button(text=cat.name, callback_data=f"w_cat_{cat.id}")
+    builder.button(text="Отмена", callback_data="cancel_sale")
+    builder.adjust(1)
+    return builder.as_markup()
+
 def sell_product_list_kb(products) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     
@@ -19,6 +27,7 @@ def sell_product_list_kb(products) -> InlineKeyboardMarkup:
                 callback_data=f"sell_{product.id}"
             )
             
+    builder.button(text="🔙 К категориям", callback_data="back_to_w_cats")
     builder.button(text="Отмена", callback_data="cancel_sale")
     builder.adjust(1)
     return builder.as_markup()

@@ -7,7 +7,11 @@ from app.api.routers import example
 def create_app(container: Container) -> FastAPI:
     app = FastAPI()
     app.state.container = container
+    
+    from app.api.routers import example, stats
     app.include_router(example.router)
+    app.include_router(stats.router)
+    
     return app
 
 async def start_api(container: Container):

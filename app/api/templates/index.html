@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stock Analytics | Live</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0e14;
+            --surface: #151921;
+            --surface-hover: #1c222d;
+            --primary: #6366f1;
+            --accent: #8b5cf6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.05);
+            --nav-bg: rgba(21, 25, 33, 0.85);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 20px 20px 100px 20px; /* space for bottom nav */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Pages */
+        .page { display: none; }
+        .page.active { display: block; animation: fadeIn 0.4s ease-out; }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .brand h1 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .live-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            padding: 4px 10px;
+            border-radius: 100px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        /* Filters */
+        select {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            transition: 0.3s;
+        }
+
+        .stat-card h3 { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; font-weight: 700; }
+        .stat-card .value { font-size: 1.5rem; font-weight: 800; }
+        
+        .card-box {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .card-box h2 { font-size: 1rem; color: var(--text-muted); margin-bottom: 16px; font-weight: 600; }
+
+        /* Staff & Inventory List */
+        .list-container { display: flex; flex-direction: column; gap: 10px; }
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--bg);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .item-info { display: flex; flex-direction: column; }
+        .item-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 2px;}
+        .item-meta { font-size: 0.75rem; color: var(--text-muted); }
+        .item-value { font-weight: 800; font-size: 0.95rem; }
+        .val-success { color: var(--success); }
+        
+        /* Badges */
+        .badge {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .bg-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2) }
+        .bg-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid rgba(245,158,11,0.2)}
+        .bg-success { background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.2) }
+
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 400px;
+            background: var(--nav-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .nav-btn svg { width: 22px; height: 22px; stroke-width: 2; stroke: currentColor; fill: none; }
+        .nav-btn.active { background: var(--surface-hover); color: var(--primary); }
+
+        /* Responsive Resizes */
+        @media (max-width: 600px) {
+            .stats-grid { grid-template-columns: 1fr; gap: 12px; }
+            .card-box { padding: 16px; }
+            .bottom-nav { width: calc(100% - 32px); bottom: 16px;}
+        }
+        
+        @media (min-width: 850px) {
+            .desktop-split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <!-- PAGE 1: DASHBOARD -->
+        <div id="page-dashboard" class="page active">
+            <header>
+                <div class="brand">
+                    <div class="live-badge"><div class="live-dot"></div> Live</div>
+                    <h1>Asosiy Ko'rsatkichlar</h1>
+                </div>
+                <select id="periodSelect" onchange="fetchStats()">
+                    <option value="today">Bugun</option>
+                    <option value="week" selected>7 kunlik</option>
+                </select>
+            </header>
+
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <h3>Umumiy Tushum</h3>
+                    <div class="value" id="valRevenue">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Sotilgan tovarlar</h3>
+                    <div class="value" id="valItems">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Cheklar soni</h3>
+                    <div class="value" id="valSales">0</div>
+                </div>
+            </section>
+
+            <div class="desktop-split">
+                <div class="card-box">
+                    <h2>Kategoriya bo'yicha ulush</h2>
+                    <div style="height: 280px; width:100%; position:relative; display:flex; justify-content:center;">
+                        <canvas id="productsChart"></canvas>
+                    </div>
+                </div>
+                <div class="card-box">
+                    <h2>Xodimlar Reytingi (Top 5)</h2>
+                    <div id="staffList" class="list-container">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE 2: INVENTORY (MOCK DEMO) -->
+        <div id="page-inventory" class="page">
+            <header>
+                <div class="brand">
+                    <div class="live-badge" style="background:var(--surface-hover); color:var(--text-muted)"><svg style="width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Demo Holati</div>
+                    <h1>Ombor Holati</h1>
+                </div>
+            </header>
+
+            <div class="card-box">
+                <h2>O'z vaqtida to'ldirish kerak (Tanqis)</h2>
+                <div class="list-container">
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">Katta hajmli Coca-Cola 1.5L</div>
+                            <div class="item-meta">Ichimliklar</div>
+                        </div>
+                        <div class="badge bg-danger">Qoldiq: 2 ta</div>
+                    </div>
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">Lays Chips 90g (Cheese)</div>
+                            <div class="item-meta">Yengil tamaddilar</div>
+                        </div>
+                        <div class="badge bg-warning">Qoldiq: 8 ta</div>
+                    </div>
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">Orbit Yalpizli</div>
+                            <div class="item-meta">Shirinliklar</div>
+                        </div>
+                        <div class="badge bg-danger">Qoldiq: 4 ta</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-box">
+                <h2>Yetarli zaxirada</h2>
+                <div class="list-container">
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">Pepsi 1L</div>
+                            <div class="item-meta">Ichimliklar</div>
+                        </div>
+                        <div class="badge bg-success">Qoldiq: 45 ta</div>
+                    </div>
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">Snickers Super</div>
+                            <div class="item-meta">Shirinliklar</div>
+                        </div>
+                        <div class="badge bg-success">Qoldiq: 89 ta</div>
+                    </div>
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">Flash Energy Drink 0.5L</div>
+                            <div class="item-meta">Ichimliklar</div>
+                        </div>
+                        <div class="badge bg-success">Qoldiq: 120 ta</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- BOTTOM NAVIGATION TABS -->
+    <nav class="bottom-nav">
+        <button class="nav-btn active" onclick="switchTab('dashboard', this)">
+            <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+            Asosiy
+        </button>
+        <button class="nav-btn" onclick="switchTab('inventory', this)">
+            <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+            Ombor
+        </button>
+    </nav>
+
+    <script>
+        // TAB SWITCHING LOGIC
+        function switchTab(tabId, btnContext) {
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(`page-${tabId}`).classList.add('active');
+            btnContext.classList.add('active');
+        }
+
+        // REAL-TIME DASHBOARD LOGIC
+        let chartInstance = null;
+
+        async function fetchStats() {
+            const period = document.getElementById('periodSelect')?.value || 'week';
+            try {
+                const res = await fetch(`/api/stats?period=${period}`);
+                const data = await res.json();
+                updateUI(data);
+            } catch (e) { console.error("Update failed", e); }
+        }
+
+        function updateUI(data) {
+            document.getElementById('valRevenue').innerHTML = `${data.total_revenue.toLocaleString('uz-UZ')} <span style="font-size: 0.9rem; color: var(--text-muted)">so'm</span>`;
+            document.getElementById('valItems').textContent = data.total_items.toLocaleString('uz-UZ');
+            document.getElementById('valSales').textContent = data.total_transactions.toLocaleString('uz-UZ');
+
+            // Update Staff List
+            const staffListEl = document.getElementById('staffList');
+            staffListEl.innerHTML = '';
+            
+            const sortedStaff = Object.entries(data.staff_breakdown)
+                .sort((a, b) => b[1].revenue - a[1].revenue)
+                .slice(0, 5);
+
+            if (sortedStaff.length === 0) {
+                staffListEl.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">Ma\'lumotlar yo\'q</div>';
+            }
+
+            sortedStaff.forEach(([name, stats]) => {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `
+                    <div class="item-info">
+                        <div class="item-title">${name}</div>
+                        <div class="item-meta">${stats.count} ta savdo</div>
+                    </div>
+                    <div class="item-value val-success">${stats.revenue.toLocaleString('uz-UZ')} so'm</div>
+                `;
+                staffListEl.appendChild(item);
+            });
+
+            updateChart(data.products_breakdown);
+        }
+
+        function updateChart(productsData) {
+            const ctx = document.getElementById('productsChart').getContext('2d');
+            const labels = Object.keys(productsData);
+            const values = labels.map(l => productsData[l].revenue);
+            const colors = ['#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9'];
+
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{ data: values, backgroundColor: colors, borderWidth: 0, borderRadius: 8, spacing: 4 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '76%',
+                    plugins: { 
+                        legend: { position: 'bottom', labels: { color: '#94a3b8', usePointStyle: true, padding: 20, font: {family: 'Plus Jakarta Sans', weight: 600} } },
+                        tooltip: { backgroundColor: '#1c222d', cornerRadius: 10, titleFont: {family: 'Plus Jakarta Sans'}, bodyFont: {family: 'Plus Jakarta Sans'}, callbacks: { label: (ctx) => `  ${ctx.raw.toLocaleString('uz-UZ')} so'm` } }
+                    }
+                }
+            });
+        }
+
+        // Real-time: Poll every 10 seconds
+        setInterval(fetchStats, 10000);
+        fetchStats();
+    </script>
+</body>
+</html>

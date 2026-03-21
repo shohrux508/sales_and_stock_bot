@@ -4,8 +4,21 @@ from app.database.models import User, UserRole
 from app.container import Container
 
 from app.services.product_service import ProductService
-from app.telegram.states.admin import AddProductState, WaitAdminReply
-from app.telegram.keyboards.admin import main_admin_kb, products_list_kb, cancel_kb, product_edit_kb
+from app.services.user_service import UserService
+from app.services.category_service import CategoryService
+from app.services.transaction_service import TransactionService
+
+from app.telegram.states.admin import AddProductState, AddCategoryState, WaitAdminReply
+from app.telegram.keyboards.admin import (
+    main_admin_kb, 
+    products_list_kb, 
+    cancel_kb, 
+    product_edit_kb, 
+    categories_list_kb, 
+    approve_user_kb,
+    stats_periods_kb,
+    undo_tx_kb
+)
 
 router = Router()
 
@@ -13,8 +26,8 @@ router = Router()
 # We can do this with a Custom Filter, but for simplicity we'll check inside or use F.role == UserRole.ADMIN
 # Since db_user is passed to every handler, we can filter using it (Aiogram 3 allows checking kwargs in F-magic)
 # However, the easiest way for now is a custom function or simple lambda.
-router.message.filter(lambda msg, db_user: db_user is not None and db_user.role == UserRole.ADMIN)
-router.callback_query.filter(lambda call, db_user: db_user is not None and db_user.role == UserRole.ADMIN)
+router.message.filter(lambda event, db_user=None: db_user is not None and db_user.role == UserRole.ADMIN)
+router.callback_query.filter(lambda event, db_user=None: db_user is not None and db_user.role == UserRole.ADMIN)
 
 @router.message(F.text == "📦 Склад")
 async def show_stock(message: types.Message, container: Container):
@@ -38,12 +51,66 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("Действие отменено.", reply_markup=main_admin_kb())
 
+# --- Category Management ---
+@router.message(F.text == "🗂 Категории")
+async def show_categories(message: types.Message, container: Container):
+    from app.services.category_service import CategoryService
+    from app.telegram.keyboards.admin import categories_list_kb
+    category_service: CategoryService = container.get("category_service")
+    categories = await category_service.get_all_categories()
+    
+    if not categories:
+        await message.answer("Категорий пока нет. Вы можете их добавить.", reply_markup=categories_list_kb([]))
+    else:
+        await message.answer("Управление категориями:", reply_markup=categories_list_kb(categories))
+
+@router.callback_query(F.data == "add_category")
+async def cb_add_category(call: types.CallbackQuery, state: FSMContext):
+    from app.telegram.states.admin import AddCategoryState
+    await state.set_state(AddCategoryState.name)
+    await call.message.edit_text("Введите название новой категории:", reply_markup=None)
+    await call.bot.send_message(call.message.chat.id, "Или нажмите 'Отмена' для возврата.", reply_markup=cancel_kb())
+
+@router.message(AddCategoryState.name)
+async def process_add_category_name(message: types.Message, state: FSMContext, container: Container):
+    category_name = message.text.strip()
+    category_service: CategoryService = container.get("category_service")
+    
+    try:
+        await category_service.create_category(category_name)
+        await message.answer(f"✅ Категория '{category_name}' успешно создана!", reply_markup=main_admin_kb())
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}", reply_markup=main_admin_kb())
+    finally:
+        await state.clear()
+
+@router.callback_query(F.data.startswith("manage_cat_"))
+async def cb_manage_category(call: types.CallbackQuery):
+    cat_id = int(call.data.split("_")[2])
+    await call.answer(f"Управление категорией ID {cat_id} (в разработке)", show_alert=True)
+
 # --- Add Product ---
 @router.callback_query(F.data == "add_product")
-async def start_add_product(call: types.CallbackQuery, state: FSMContext):
-    await call.message.delete()
-    await call.message.answer("Введите название нового товара:", reply_markup=cancel_kb())
+async def start_add_product(call: types.CallbackQuery, state: FSMContext, container: Container):
+    from app.services.category_service import CategoryService
+    from app.telegram.keyboards.admin import categories_list_kb
+    category_service: CategoryService = container.get("category_service")
+    categories = await category_service.get_all_categories()
+    
+    if not categories:
+        await call.answer("Сначала создайте категорию (🗂 Категории)!", show_alert=True)
+        return
+        
+    await state.set_state(AddProductState.category_id)
+    await call.message.edit_text("Выберите категорию для нового товара:", reply_markup=categories_list_kb(categories, for_selection=True))
+
+@router.callback_query(AddProductState.category_id, F.data.startswith("select_cat_"))
+async def cb_select_category_for_product(call: types.CallbackQuery, state: FSMContext):
+    cat_id = int(call.data.split("_")[2])
+    await state.update_data(category_id=cat_id)
     await state.set_state(AddProductState.name)
+    await call.message.edit_text("Отлично. Введите название нового товара:", reply_markup=None)
+    await call.bot.send_message(call.message.chat.id, "Или отправьте 'Отмена'", reply_markup=cancel_kb())
 
 @router.message(AddProductState.name)
 async def process_product_name(message: types.Message, state: FSMContext):
@@ -75,7 +142,8 @@ async def process_product_quantity(message: types.Message, state: FSMContext, co
     product_service: ProductService = container.get("product_service")
     
     try:
-        await product_service.create_product(name=data['name'], price=data['price'], quantity=qty)
+        cat_id = data.get("category_id")
+        await product_service.create_product(name=data['name'], price=data['price'], quantity=qty, category_id=cat_id)
         await message.answer(f"✅ Товар '{data['name']}' добавлен!", reply_markup=main_admin_kb())
     except Exception as e:
         await message.answer("❌ Ошибка при добавлении в БД. Возможно, товар с таким именем уже существует.", reply_markup=main_admin_kb())
@@ -125,10 +193,36 @@ async def cb_dec_product(call: types.CallbackQuery, container: Container):
 async def admin_start(message: types.Message, db_user: User):
     await message.answer(f"Добро пожаловать в панель администратора, {db_user.username}!", reply_markup=main_admin_kb())
 
+# --- Staff Moderation ---
+@router.callback_query(F.data.startswith("approve_"))
+async def cb_approve_user(call: types.CallbackQuery, container: Container):
+    user_id = int(call.data.split("_")[1])
+    user_service: UserService = container.get("user_service")
+    
+    updated_user = await user_service.update_user_role(user_id, UserRole.WORKER)
+    if updated_user:
+        await call.message.edit_text(f"✅ Пользователь @{updated_user.username or user_id} получил доступ (WORKER).")
+        try:
+            await call.bot.send_message(user_id, "🎉 Ваша заявка одобрена! Теперь вам доступно меню сотрудника.\nНажмите /start.")
+        except Exception:
+            pass
+    else:
+        await call.answer("Ошибка при обновлении роли", show_alert=True)
+
+@router.callback_query(F.data.startswith("reject_"))
+async def cb_reject_user(call: types.CallbackQuery, container: Container):
+    user_id = int(call.data.split("_")[1])
+    user_service: UserService = container.get("user_service")
+    
+    updated_user = await user_service.update_user_role(user_id, UserRole.BANNED)
+    if updated_user:
+        await call.message.edit_text(f"⛔ Пользователь @{updated_user.username or user_id} отклонен (BANNED).")
+    else:
+        await call.answer("Ошибка при обновлении роли", show_alert=True)
+
 # --- Manage Staff ---
 @router.message(F.text == "👥 Сотрудники")
 async def show_staff(message: types.Message, container: Container):
-    from app.services.user_service import UserService
     user_service: UserService = container.get("user_service")
     
     users = await user_service.get_all_users()
@@ -153,7 +247,6 @@ async def show_stats_menu(message: types.Message):
 @router.callback_query(F.data.startswith("stats_period_"))
 async def process_stats(call: types.CallbackQuery, container: Container):
     period = call.data.split("_")[2] # "today" or "week"
-    from app.services.transaction_service import TransactionService
     transaction_service: TransactionService = container.get("transaction_service")
     
     transactions = await transaction_service.get_admin_statistics(period)
@@ -189,3 +282,66 @@ async def process_stats(call: types.CallbackQuery, container: Container):
         text += f"{rank}. {p_name} — {stats['count']} шт. ({stats['revenue']} руб.)\n"
         
     await call.message.edit_text(text, parse_mode="Markdown")
+
+# --- Rollbacks F3 ---
+@router.callback_query(F.data.startswith("undo_tx_"))
+async def cb_undo_tx(call: types.CallbackQuery, container: Container):
+    tx_id = int(call.data.split("_")[2])
+    transaction_service: TransactionService = container.get("transaction_service")
+    
+    success = await transaction_service.rollback_sale(tx_id)
+    if success:
+        # Edit the original alert message
+        original_text = call.message.text or call.message.caption or "Детали неизвестны"
+        new_text = f"❌ *Транзакция отменена. Товар возвращен на склад.*\n\n~~{original_text}~~"
+        await call.message.edit_text(new_text, parse_mode="Markdown")
+        await call.answer("Возврат оформлен!", show_alert=True)
+# --- Excel Export F4 ---
+@router.callback_query(F.data.startswith("export_excel_"))
+async def cb_export_excel(call: types.CallbackQuery, container: Container):
+    period = call.data.split("_")[2]
+    transaction_service: TransactionService = container.get("transaction_service")
+    
+    transactions = await transaction_service.get_admin_statistics(period)
+    if not transactions:
+        await call.answer("Нет транзакций за этот период", show_alert=True)
+        return
+        
+    import openpyxl
+    from aiogram.types import BufferedInputFile
+    import io
+    from datetime import datetime
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Продажи"
+    
+    headers = ["ID чека", "Дата/Время (UTC)", "Сотрудник", "Категория", "Товар", "Кол-во", "Сумма (руб)"]
+    ws.append(headers)
+    
+    for t in transactions:
+        prod_name = t.product.name if t.product else "Удален"
+        cat_name = t.product.category.name if getattr(t.product, 'category', None) else "Не указана"
+        user_name = t.user.username if t.user and t.user.username else str(t.user_id)
+        
+        row = [
+            t.id,
+            t.timestamp.strftime("%Y-%m-%d %H:%M:%S") if t.timestamp else "",
+            user_name,
+            cat_name,
+            prod_name,
+            t.amount,
+            t.total_price
+        ]
+        ws.append(row)
+        
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    
+    file_name = f"Report_{period}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    file = BufferedInputFile(buf.read(), filename=file_name)
+    
+    await call.message.answer_document(document=file, caption="📥 Ваш Excel-отчет готов!")
+    await call.answer()
+

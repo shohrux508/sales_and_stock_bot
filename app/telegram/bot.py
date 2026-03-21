@@ -13,8 +13,8 @@ async def start_telegram(container: Container):
     # Setup middlewares
     from app.telegram.middlewares.auth import AuthMiddleware
     auth_middleware = AuthMiddleware()
-    dp.message.middleware(auth_middleware)
-    dp.callback_query.middleware(auth_middleware)
+    dp.message.outer_middleware(auth_middleware)
+    dp.callback_query.outer_middleware(auth_middleware)
 
     # Include routers
     dp.include_router(admin.router)

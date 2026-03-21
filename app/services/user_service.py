@@ -11,21 +11,23 @@ class UserService:
     def __init__(self, async_session_maker: async_sessionmaker):
         self.session_maker = async_session_maker
 
-    async def get_or_create_user(self, tg_id: int, username: str | None, default_role: UserRole = UserRole.WORKER) -> User:
-        """Get an existing user or create a new one."""
+    async def get_or_create_user(self, tg_id: int, username: str | None, default_role: UserRole = UserRole.PENDING) -> tuple[User, bool]:
+        """Get an existing user or create a new one. Returns tuple(User, is_created)."""
         async with self.session_maker() as session:
             stmt = select(User).where(User.tg_id == tg_id)
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()
-
+            
+            created = False
             if not user:
                 logger.info(f"Creating new user {tg_id} with role {default_role.name}")
                 user = User(tg_id=tg_id, username=username, role=default_role)
                 session.add(user)
                 await session.commit()
                 await session.refresh(user)
+                created = True
             
-            return user
+            return user, created
 
     async def get_user_by_tg_id(self, tg_id: int) -> User | None:
         async with self.session_maker() as session:

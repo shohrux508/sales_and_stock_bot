@@ -23,9 +23,15 @@ class ProductService:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
             
-    async def create_product(self, name: str, price: float, quantity: int) -> Product:
+    async def get_products_by_category(self, category_id: int) -> Sequence[Product]:
         async with self.session_maker() as session:
-            product = Product(name=name, price=price, quantity=quantity)
+            stmt = select(Product).where(Product.category_id == category_id).order_by(Product.name)
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
+    async def create_product(self, name: str, price: float, quantity: int, category_id: int | None = None) -> Product:
+        async with self.session_maker() as session:
+            product = Product(name=name, price=price, quantity=quantity, category_id=category_id)
             session.add(product)
             await session.commit()
             await session.refresh(product)

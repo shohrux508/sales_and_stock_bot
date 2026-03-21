@@ -44,6 +44,28 @@ class TransactionService:
                 
             return transaction
 
+    async def rollback_sale(self, transaction_id: int) -> bool:
+        async with self.session_maker() as session:
+            stmt = select(Transaction).where(Transaction.id == transaction_id)
+            result = await session.execute(stmt)
+            transaction = result.scalar_one_or_none()
+            
+            if not transaction:
+                return False
+                
+            # Restore product quantity
+            if transaction.product_id:
+                prod_stmt = select(Product).where(Product.id == transaction.product_id)
+                prod_result = await session.execute(prod_stmt)
+                product = prod_result.scalar_one_or_none()
+                if product:
+                    product.quantity += transaction.amount
+                    
+            # Delete transaction
+            await session.delete(transaction)
+            await session.commit()
+            return True
+
     async def get_worker_sales_today(self, user_id: int) -> Sequence[Transaction]:
         """Gets all sales for a specific worker for the current day."""
         async with self.session_maker() as session:
@@ -74,7 +96,7 @@ class TransactionService:
                 
             from sqlalchemy.orm import selectinload
             stmt = select(Transaction).options(
-                selectinload(Transaction.product), 
+                selectinload(Transaction.product).selectinload(Product.category), 
                 selectinload(Transaction.user)
             ).where(
                 Transaction.timestamp >= start_date
