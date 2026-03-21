@@ -2,7 +2,10 @@ import asyncio
 import logging
 from app.config import settings
 from app.container import Container
-from app.services.example_service import ExampleService
+from app.services.user_service import UserService
+from app.services.product_service import ProductService
+from app.services.transaction_service import TransactionService
+from app.database.core import async_session_maker
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +15,10 @@ class App:
 
     def setup_services(self):
         logger.info("Setting up services...")
-        self.container.register("example_service", ExampleService())
-        
+        self.container.register("user_service", UserService(async_session_maker))
+        self.container.register("product_service", ProductService(async_session_maker))
+        self.container.register("transaction_service", TransactionService(async_session_maker))
+
 
     async def setup_telegram(self):
         if settings.RUN_TELEGRAM:

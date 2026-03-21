@@ -4,3 +4,6 @@ uvicorn
 pydantic-settings
 python-dotenv
 pytest
+sqlalchemy[asyncio]
+aiosqlite
+alembic

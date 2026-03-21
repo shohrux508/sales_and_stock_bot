@@ -9,6 +9,7 @@ logging.basicConfig(
 
 class Settings(BaseSettings):
     BOT_TOKEN: str
+    ADMIN_ID: int  # Ensure ADMIN_ID is required
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     RUN_TELEGRAM: bool = True
