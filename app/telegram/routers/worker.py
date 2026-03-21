@@ -39,6 +39,28 @@ async def cancel_sale_cb(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer("Оформление продажи отменено.", reply_markup=main_worker_kb())
 
 # --- Sell Logic ---
+@router.message(F.text.regexp(r'^\d{8,14}$'))
+async def process_scanned_barcode(message: types.Message, state: FSMContext, container: Container):
+    barcode = message.text.strip()
+    product_service: ProductService = container.get("product_service")
+    product = await product_service.get_product_by_barcode(barcode)
+    
+    if not product:
+        await message.answer(f"Товар со штрих-кодом {barcode} не найден.")
+        return
+        
+    if product.quantity == 0:
+        await message.answer(f"Товар *{product.name}* найден, но его нет в наличии (0 шт).", parse_mode="Markdown")
+        return
+        
+    await state.update_data(product_id=product.id, max_qty=product.quantity, product_name=product.name, price=product.price)
+    await message.answer(
+        f"🔍 Найден товар: *{product.name}*\nДоступно: {product.quantity} шт.\n\nВведите количество для продажи:",
+        parse_mode="Markdown",
+        reply_markup=cancel_worker_kb()
+    )
+    await state.set_state(SellState.amount)
+
 @router.message(F.text == "🛒 Оформить продажу")
 async def start_sell(message: types.Message, container: Container, state: FSMContext):
     category_service: CategoryService = container.get("category_service")
@@ -90,7 +112,7 @@ async def process_sell_product(call: types.CallbackQuery, state: FSMContext, con
         await call.message.edit_reply_markup(reply_markup=sell_product_list_kb(products))
         return
         
-    await state.update_data(product_id=product_id, max_qty=product.quantity, product_name=product.name)
+    await state.update_data(product_id=product_id, max_qty=product.quantity, product_name=product.name, price=product.price)
     await call.message.delete()
     await call.message.answer(
         f"Выбран товар: *{product.name}*\nДоступно: {product.quantity} шт.\n\nВведите количество для продажи:",
@@ -111,39 +133,92 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
         
     data = await state.get_data()
     max_qty = data['max_qty']
-    product_id = data['product_id']
-    product_name = data['product_name']
     
-    if amount > max_qty:
-        await message.answer(f"Ошибка! Вы не можете продать больше, чем есть на складе ({max_qty} шт). Введите количество заново:")
+    cart = data.get('cart', [])
+    already_in_cart = sum(item['amount'] for item in cart if item['product_id'] == data['product_id'])
+    
+    if amount + already_in_cart > max_qty:
+        await message.answer(f"Ошибка! Всего на складе {max_qty} шт. В корзине уже {already_in_cart}. Введите количество заново:")
         return
         
-    transaction_service: TransactionService = container.get("transaction_service")
-    transaction = await transaction_service.create_sale(user_id=db_user.id, product_id=product_id, amount=amount)
+    cart.append({
+        'product_id': data['product_id'],
+        'product_name': data['product_name'],
+        'price': data.get('price', 0),
+        'amount': amount
+    })
+    await state.update_data(cart=cart)
     
-    if not transaction:
-        await message.answer("Ошибка при оформлении продажи. Возможно, остаток уже изменился.", reply_markup=main_worker_kb())
+    from app.telegram.keyboards.worker import cart_decision_kb
+    await message.answer(
+        f"✅ Товар добавлен в чек.\nВсего в чеке: {len(cart)} позиций.\nЧто делаем дальше?", 
+        reply_markup=cart_decision_kb()
+    )
+    await state.set_state(SellState.checkout_decision)
+
+@router.callback_query(SellState.checkout_decision, F.data == "cart_add_more")
+async def cart_add_more(call: types.CallbackQuery, state: FSMContext, container: Container):
+    from app.services.category_service import CategoryService
+    from app.telegram.keyboards.worker import worker_categories_kb
+    category_service: CategoryService = container.get("category_service")
+    categories = await category_service.get_all_categories()
+    await state.set_state(SellState.category_id)
+    await call.message.edit_text("Выберите категорию:", reply_markup=worker_categories_kb(categories))
+
+@router.callback_query(SellState.checkout_decision, F.data == "cart_checkout")
+async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container: Container, db_user: User):
+    data = await state.get_data()
+    cart = data.get('cart', [])
+    if not cart:
+        await call.answer("Корзина пуста!", show_alert=True)
+        return
+        
+    import uuid
+    order_group_id = str(uuid.uuid4())
+    
+    transaction_service: TransactionService = container.get("transaction_service")
+    transactions = []
+    
+    for item in cart:
+        tx = await transaction_service.create_sale(
+            user_id=db_user.id, 
+            product_id=item['product_id'], 
+            amount=item['amount'],
+            order_group_id=order_group_id
+        )
+        if tx:
+            transactions.append(tx)
+            
+    if not transactions:
+        await call.message.edit_text("Ошибка при оформлении. Возможно, товары закончились.")
         await state.clear()
         return
         
-    await message.answer(f"✅ Успешно!\nПродано: {product_name} - {amount} шт.\nСумма: {transaction.total_price} руб.", reply_markup=main_worker_kb())
-    await state.clear()
+    total_rub = sum(tx.total_price for tx in transactions)
+    total_qty = sum(tx.amount for tx in transactions)
+    
+    items_text = "\n".join([f"• {tx.product.name} ({tx.amount} шт) - {tx.total_price} руб." for tx in transactions])
+    
+    await call.message.edit_text(f"✅ Чек пробит!\n\nТовары:\n{items_text}\n\n*Итого:* {total_rub} руб.", parse_mode="Markdown")
     
     # Notify admin
-    bot = message.bot
-    worker_name = message.from_user.full_name or message.from_user.username or str(db_user.tg_id)
-    alert_text = f"💰 *Продажа!*\nТовар: {product_name}\nКол-во: {amount} шт.\nСумма: {transaction.total_price} руб.\nОформил: {worker_name}"
+    worker_name = call.from_user.full_name or call.from_user.username or str(db_user.tg_id)
+    alert_text = f"💰 *Новая продажа (Чек)!*\n\nТовары:\n{items_text}\n\nВсего: {total_qty} шт.\nСумма: {total_rub} руб.\nОформил: {worker_name}"
     
+    # Critical Stock Check for all products
     product_service: ProductService = container.get("product_service")
-    product_after_sale = await product_service.get_product_by_id(product_id)
-    
-    if product_after_sale and product_after_sale.quantity < 5:
-        alert_text += f"\n\n⚠️ *Critical Stock Alert*\nОстаток {product_name} критически мал: {product_after_sale.quantity} шт!"
-        
+    for tx in transactions:
+        prod_after = await product_service.get_product_by_id(tx.product_id)
+        if prod_after and prod_after.quantity < 5:
+            alert_text += f"\n\n⚠️ *Critical Stock*\nОстаток {prod_after.name}: {prod_after.quantity} шт!"
+            
     try:
-        await bot.send_message(settings.ADMIN_ID, alert_text, parse_mode="Markdown", reply_markup=undo_tx_kb(transaction.id))
-    except Exception as e:
-        pass # Admin might not have started the bot, ignore for MVP
+        await call.bot.send_message(settings.ADMIN_ID, alert_text, parse_mode="Markdown", reply_markup=undo_tx_kb(transactions[0].id))
+    except Exception:
+        pass
+        
+    await call.message.answer("Выберите:", reply_markup=main_worker_kb())
+    await state.clear()
 
 # --- Worker Stats ---
 @router.message(F.text == "📈 Мои продажи (смена)")

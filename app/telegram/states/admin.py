@@ -11,3 +11,18 @@ class AddProductState(StatesGroup):
 
 class WaitAdminReply(StatesGroup):
     waiting_for_new_quantity = State()
+
+class ReceiptState(StatesGroup):
+    category_id = State()
+    product_id = State()
+    quantity = State()
+
+class WriteOffState(StatesGroup):
+    category_id = State()
+    product_id = State()
+    quantity = State()
+    reason = State()
+
+class BindBarcodeState(StatesGroup):
+    product_id = State()
+    barcode = State()

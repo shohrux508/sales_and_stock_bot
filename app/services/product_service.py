@@ -50,6 +50,19 @@ class ProductService:
             await session.commit()
             return result.scalar_one()
 
+    async def update_barcode(self, product_id: int, barcode: str) -> bool:
+        async with self.session_maker() as session:
+            stmt = update(Product).where(Product.id == product_id).values(barcode=barcode)
+            result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount > 0
+
+    async def get_product_by_barcode(self, barcode: str) -> Product | None:
+        async with self.session_maker() as session:
+            stmt = select(Product).where(Product.barcode == barcode)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
     async def delete_product(self, product_id: int) -> bool:
         async with self.session_maker() as session:
             stmt = delete(Product).where(Product.id == product_id)

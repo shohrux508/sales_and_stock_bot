@@ -289,7 +289,7 @@ async def cb_undo_tx(call: types.CallbackQuery, container: Container):
     tx_id = int(call.data.split("_")[2])
     transaction_service: TransactionService = container.get("transaction_service")
     
-    success = await transaction_service.rollback_sale(tx_id)
+    success = await transaction_service.rollback_transaction(tx_id)
     if success:
         # Edit the original alert message
         original_text = call.message.text or call.message.caption or "Детали неизвестны"
@@ -344,4 +344,141 @@ async def cb_export_excel(call: types.CallbackQuery, container: Container):
     
     await call.message.answer_document(document=file, caption="📥 Ваш Excel-отчет готов!")
     await call.answer()
+
+# --- Inventory Management (Receipt & Write-off) ---
+from app.telegram.states.admin import ReceiptState, WriteOffState, BindBarcodeState
+from app.telegram.keyboards.worker import worker_categories_kb, sell_product_list_kb
+
+# Receipt Flow
+@router.message(F.text == "📥 Приемка")
+async def start_receipt(message: types.Message, state: FSMContext, container: Container):
+    category_service: CategoryService = container.get("category_service")
+    categories = await category_service.get_all_categories()
+    if not categories:
+        await message.answer("Сначала создайте категории!")
+        return
+    await state.set_state(ReceiptState.category_id)
+    await message.answer("Выберите категорию для приемки:", reply_markup=worker_categories_kb(categories))
+
+@router.callback_query(ReceiptState.category_id, F.data.startswith("w_cat_"))
+async def receipt_select_cat(call: types.CallbackQuery, state: FSMContext, container: Container):
+    cat_id = int(call.data.split("_")[2])
+    await state.update_data(category_id=cat_id)
+    product_service: ProductService = container.get("product_service")
+    products = await product_service.get_products_by_category(cat_id)
+    if not products:
+        await call.answer("В этой категории нет товаров.", show_alert=True)
+        return
+    await state.set_state(ReceiptState.product_id)
+    await call.message.edit_text("Выберите товар для приемки:", reply_markup=sell_product_list_kb(products))
+
+@router.callback_query(ReceiptState.product_id, F.data.startswith("sell_"))
+async def receipt_select_product(call: types.CallbackQuery, state: FSMContext, container: Container):
+    product_id = int(call.data.split("_")[1])
+    product_service: ProductService = container.get("product_service")
+    product = await product_service.get_product_by_id(product_id)
+    await state.update_data(product_id=product_id, product_name=product.name)
+    await call.message.delete()
+    await call.message.answer(f"📦 Приемка: *{product.name}*\nТекущий остаток: {product.quantity} шт.\n\nВведите количество для зачисления:", parse_mode="Markdown", reply_markup=cancel_kb())
+    await state.set_state(ReceiptState.quantity)
+
+@router.message(ReceiptState.quantity)
+async def process_receipt_quantity(message: types.Message, state: FSMContext, container: Container, db_user: User):
+    try:
+        qty = int(message.text)
+        if qty <= 0: raise ValueError()
+    except ValueError:
+        await message.answer("Введите положительное число.")
+        return
+    data = await state.get_data()
+    transaction_service: TransactionService = container.get("transaction_service")
+    await transaction_service.create_receipt(user_id=db_user.id, product_id=data['product_id'], amount=qty)
+    await message.answer(f"✅ Успешно зачислено {qty} шт. товара *{data['product_name']}*.", parse_mode="Markdown", reply_markup=main_admin_kb())
+    await state.clear()
+
+# Write-off Flow
+@router.message(F.text == "🗑 Списание")
+async def start_write_off(message: types.Message, state: FSMContext, container: Container):
+    category_service: CategoryService = container.get("category_service")
+    categories = await category_service.get_all_categories()
+    if not categories:
+        await message.answer("Сначала создайте категории!")
+        return
+    await state.set_state(WriteOffState.category_id)
+    await message.answer("Выберите категорию для списания:", reply_markup=worker_categories_kb(categories))
+
+@router.callback_query(WriteOffState.category_id, F.data.startswith("w_cat_"))
+async def write_off_select_cat(call: types.CallbackQuery, state: FSMContext, container: Container):
+    cat_id = int(call.data.split("_")[2])
+    await state.update_data(category_id=cat_id)
+    product_service: ProductService = container.get("product_service")
+    products = await product_service.get_products_by_category(cat_id)
+    available = [p for p in products if p.quantity > 0]
+    if not available:
+        await call.answer("Нет доступных товаров для списания.", show_alert=True)
+        return
+    await state.set_state(WriteOffState.product_id)
+    await call.message.edit_text("Выберите товар для списания:", reply_markup=sell_product_list_kb(available))
+
+@router.callback_query(WriteOffState.product_id, F.data.startswith("sell_"))
+async def write_off_select_product(call: types.CallbackQuery, state: FSMContext, container: Container):
+    product_id = int(call.data.split("_")[1])
+    product_service: ProductService = container.get("product_service")
+    product = await product_service.get_product_by_id(product_id)
+    await state.update_data(product_id=product_id, product_name=product.name, max_qty=product.quantity)
+    await call.message.delete()
+    await call.message.answer(f"🗑 Списание: *{product.name}*\nДоступно: {product.quantity} шт.\n\nВведите количество для списания:", parse_mode="Markdown", reply_markup=cancel_kb())
+    await state.set_state(WriteOffState.quantity)
+
+@router.message(WriteOffState.quantity)
+async def process_write_off_quantity(message: types.Message, state: FSMContext):
+    try:
+        qty = int(message.text)
+        if qty <= 0: raise ValueError()
+    except ValueError:
+        await message.answer("Введите положительное число.")
+        return
+    data = await state.get_data()
+    if qty > data['max_qty']:
+        await message.answer(f"Нельзя списать больше, чем есть на складе ({data['max_qty']}). Введите заново:")
+        return
+    await state.update_data(quantity=qty)
+    await message.answer("Введите причину списания (например, 'брак', 'просрок'):", reply_markup=cancel_kb())
+    await state.set_state(WriteOffState.reason)
+
+@router.message(WriteOffState.reason)
+async def process_write_off_reason(message: types.Message, state: FSMContext, container: Container, db_user: User):
+    reason = message.text.strip()
+    data = await state.get_data()
+    transaction_service: TransactionService = container.get("transaction_service")
+    await transaction_service.create_write_off(user_id=db_user.id, product_id=data['product_id'], amount=data['quantity'], reason=reason)
+    await message.answer(f"✅ Успешно списано {data['quantity']} шт. товара *{data['product_name']}* по причине: {reason}", parse_mode="Markdown", reply_markup=main_admin_kb())
+    await state.clear()
+
+# --- Bind Barcode ---
+@router.callback_query(F.data.startswith("prod_barcode_"))
+async def cb_bind_barcode(call: types.CallbackQuery, state: FSMContext):
+    product_id = int(call.data.split("_")[2])
+    await state.update_data(product_id=product_id)
+    await state.set_state(BindBarcodeState.barcode)
+    await call.message.edit_text("Отправьте штрих-код товара (просто напишите цифры или отсканируйте камерой):")
+    await call.message.answer("Или отмените действие:", reply_markup=cancel_kb())
+
+@router.message(BindBarcodeState.barcode)
+async def process_bind_barcode(message: types.Message, state: FSMContext, container: Container):
+    barcode = message.text.strip()
+    data = await state.get_data()
+    product_service: ProductService = container.get("product_service")
+    
+    existing = await product_service.get_product_by_barcode(barcode)
+    if existing and existing.id != data['product_id']:
+        await message.answer("Этот штрихкодуже привязан к другому товару. Попробуйте другой:", reply_markup=cancel_kb())
+        return
+        
+    success = await product_service.update_barcode(data['product_id'], barcode)
+    if success:
+        await message.answer(f"✅ Штрих-код {barcode} успешно привязан!", reply_markup=main_admin_kb())
+    else:
+        await message.answer("Ошибка при привязке штрих-кода.", reply_markup=main_admin_kb())
+    await state.clear()
 

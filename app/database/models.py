@@ -12,6 +12,11 @@ class UserRole(enum.Enum):
     PENDING = "pending"
     BANNED = "banned"
 
+class TransactionType(enum.Enum):
+    SALE = "sale"
+    RECEIPT = "receipt"
+    WRITE_OFF = "write_off"
+
 class User(Base):
     __tablename__ = "users"
 
@@ -42,6 +47,7 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     price: Mapped[float] = mapped_column(Float, default=0.0)
     quantity: Mapped[int] = mapped_column(Integer, default=0)
+    barcode: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
 
     # Relationships
@@ -60,6 +66,10 @@ class Transaction(Base):
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     total_price: Mapped[float] = mapped_column(Float, nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    type: Mapped[TransactionType] = mapped_column(SQLEnum(TransactionType), default=TransactionType.SALE)
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    order_group_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="transactions")

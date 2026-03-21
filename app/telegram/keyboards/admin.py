@@ -5,6 +5,7 @@ from app.config import settings
 def main_admin_kb() -> ReplyKeyboardMarkup:
     kb = [
         [KeyboardButton(text="📦 Склад"), KeyboardButton(text="🗂 Категории")],
+        [KeyboardButton(text="📥 Приемка"), KeyboardButton(text="🗑 Списание")],
         [KeyboardButton(text="👥 Сотрудники"), KeyboardButton(text="📊 Статистика")],
         [KeyboardButton(text="🌐 Web Dashboard", web_app=WebAppInfo(url=settings.WEBAPP_URL))]
     ]
@@ -42,9 +43,10 @@ def product_edit_kb(product_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="➕ Пополнить (+)", callback_data=f"prod_inc_{product_id}")
     builder.button(text="➖ Уменьшить (-)", callback_data=f"prod_dec_{product_id}")
+    builder.button(text="🏷 Привязать штрихкод", callback_data=f"prod_barcode_{product_id}")
     # builder.button(text="🗑 Удалить", callback_data=f"prod_del_{product_id}")
     builder.button(text="🔙 Назад к складу", callback_data="back_to_stock")
-    builder.adjust(2, 1)
+    builder.adjust(2, 1, 1)
     return builder.as_markup()
 
 def cancel_kb() -> ReplyKeyboardMarkup:

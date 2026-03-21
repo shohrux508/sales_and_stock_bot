@@ -35,3 +35,10 @@ def sell_product_list_kb(products) -> InlineKeyboardMarkup:
 def cancel_worker_kb() -> ReplyKeyboardMarkup:
     kb = [[KeyboardButton(text="Отмена")]]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def cart_decision_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="➕ Добавить еще товар", callback_data="cart_add_more")
+    builder.button(text="✅ Пробить чек", callback_data="cart_checkout")
+    builder.adjust(1)
+    return builder.as_markup()
