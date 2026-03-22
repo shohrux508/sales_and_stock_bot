@@ -12,6 +12,14 @@ class Settings(BaseSettings):
     ADMIN_ID: int  # Ensure ADMIN_ID is required
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
+
+    def __init__(self, **values):
+        super().__init__(**values)
+        import os
+        # Railway and other PaaS providers usually provide a PORT env var.
+        env_port = os.getenv("PORT")
+        if env_port:
+            self.API_PORT = int(env_port)
     WEBAPP_URL: str = "https://localhost:8000"
     RUN_TELEGRAM: bool = True
     RUN_API: bool = True
