@@ -25,5 +25,5 @@ RUN chmod +x entrypoint.sh
 # Открываем порт для FastAPI
 EXPOSE 8000
 
-# Используем entrypoint для запуска миграций и приложения
-ENTRYPOINT ["./entrypoint.sh"]
+# Используем CMD для запуска миграций и приложения
+CMD ["/app/entrypoint.sh"]
