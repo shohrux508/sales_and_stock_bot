@@ -22,8 +22,10 @@ from app.database.core import Base
 import app.database.models  # Ensure models are imported for autogenerate
 target_metadata = Base.metadata
 
-# Override sqlalchemy.url with our URL
-config.set_main_option("sqlalchemy.url", "sqlite+aiosqlite:///app.db")
+import os
+# Override sqlalchemy.url with our URL from environment
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///app.db")
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 
 # other values from the config, defined by the needs of env.py,

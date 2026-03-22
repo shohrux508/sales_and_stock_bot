@@ -5,10 +5,13 @@ from app.config import settings
 
 from sqlalchemy import MetaData
 
+import os
+
 # Construct SQLite URL. Alembic setup will use this or a similar connection string.
 # Using check_same_thread=False for sqlite.
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///app.db")
 engine = create_async_engine(
-    "sqlite+aiosqlite:///app.db",
+    DATABASE_URL,
     echo=False,
 )
 
