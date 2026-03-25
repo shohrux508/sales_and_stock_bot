@@ -26,3 +26,7 @@ class WriteOffState(StatesGroup):
 class BindBarcodeState(StatesGroup):
     product_id = State()
     barcode = State()
+
+class EditStaffKPIState(StatesGroup):
+    target_tg_id = State()
+    kpi = State()

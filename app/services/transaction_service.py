@@ -125,7 +125,8 @@ class TransactionService:
     async def get_worker_sales_today(self, user_id: int) -> Sequence[Transaction]:
         """Gets all sales for a specific worker for the current day."""
         async with self.session_maker() as session:
-            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            # Use UTC start of day for consistency with transaction timestamps
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             
             # Ensure relationships are loaded joining them
             from sqlalchemy.orm import selectinload
@@ -138,11 +139,11 @@ class TransactionService:
             result = await session.execute(stmt)
             return result.scalars().all()
 
-    async def get_admin_statistics(self, period: str = "today") -> Sequence[Transaction]:
+    async def get_admin_statistics(self, period: str = "today", user_id: int | None = None) -> Sequence[Transaction]:
         """Gets all sales for administration depending on period (today or week)"""
         async with self.session_maker() as session:
             from datetime import timedelta
-            now = datetime.now()
+            now = datetime.utcnow()
             
             if period == "today":
                 start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -152,13 +153,18 @@ class TransactionService:
                 start_date = now.replace(hour=0, minute=0, second=0, microsecond=0) # fallback
                 
             from sqlalchemy.orm import selectinload
+            
+            conditions = [
+                Transaction.type == TransactionType.SALE,
+                Transaction.timestamp >= start_date
+            ]
+            if user_id is not None:
+                conditions.append(Transaction.user_id == user_id)
+                
             stmt = select(Transaction).options(
                 selectinload(Transaction.product).selectinload(Product.category), 
                 selectinload(Transaction.user)
-            ).where(
-                Transaction.type == TransactionType.SALE,
-                Transaction.timestamp >= start_date
-            ).order_by(Transaction.timestamp.desc())
+            ).where(*conditions).order_by(Transaction.timestamp.desc())
             
             result = await session.execute(stmt)
             return result.scalars().all()

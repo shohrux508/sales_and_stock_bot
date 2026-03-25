@@ -188,6 +188,28 @@ async def cb_dec_product(call: types.CallbackQuery, container: Container):
     else:
         await call.answer("Нельзя уменьшить (остаток 0 или товар не найден)", show_alert=True)
 
+@router.callback_query(F.data.startswith("prod_del_conf_"))
+async def cb_delete_product_conf(call: types.CallbackQuery, container: Container):
+    product_id = int(call.data.split("_")[3])
+    from app.telegram.keyboards.admin import product_delete_confirm_kb
+    product_service: ProductService = container.get("product_service")
+    product = await product_service.get_product_by_id(product_id)
+    if product:
+        await call.message.edit_text(f"⚠️ Вы уверены, что хотите удалить товар *{product.name}*?\nЭто действие нельзя отменить.", parse_mode="Markdown", reply_markup=product_delete_confirm_kb(product_id))
+
+@router.callback_query(F.data.startswith("prod_del_yes_"))
+async def cb_delete_product_yes(call: types.CallbackQuery, container: Container):
+    product_id = int(call.data.split("_")[3])
+    product_service: ProductService = container.get("product_service")
+    
+    success = await product_service.delete_product(product_id)
+    if success:
+        await call.answer("Товар удален", show_alert=True)
+        products = await product_service.get_all_products()
+        await call.message.edit_text("📦 Список товаров на складе:", reply_markup=products_list_kb(products))
+    else:
+        await call.answer("Ошибка при удалении", show_alert=True)
+
 # Update start command for admin
 @router.message(F.text == "/start")
 async def admin_start(message: types.Message, db_user: User):
@@ -230,13 +252,142 @@ async def show_staff(message: types.Message, container: Container):
     
     if not workers:
         text = "Сотрудников пока нет."
+        await message.answer(text, reply_markup=main_admin_kb())
     else:
-        text = "👥 Список сотрудников:\n\n"
-        for w in workers:
-            text += f"• ID {w.tg_id} (@{w.username or 'без_юзернейма'})\n"
-            
-    # For now MVP only - admin can manage lists manually if needed.
-    await message.answer(text, reply_markup=main_admin_kb())
+        from app.telegram.keyboards.admin import staff_list_kb
+        text = "👥 Выберите сотрудника для просмотра профиля:"
+        await message.answer(text, reply_markup=staff_list_kb(workers))
+
+@router.callback_query(F.data == "staff_list")
+async def cb_staff_list(call: types.CallbackQuery, container: Container):
+    user_service: UserService = container.get("user_service")
+    users = await user_service.get_all_users()
+    workers = [u for u in users if u.role == UserRole.WORKER]
+    
+    from app.telegram.keyboards.admin import staff_list_kb
+    text = "👥 Выберите сотрудника для просмотра профиля:"
+    await call.message.edit_text(text, reply_markup=staff_list_kb(workers))
+
+@router.callback_query(F.data.startswith("staff_profile_"))
+async def cb_staff_profile(call: types.CallbackQuery, container: Container):
+    tg_id = int(call.data.split("_")[2])
+    user_service: UserService = container.get("user_service")
+    user = await user_service.get_user_by_tg_id(tg_id)
+    if not user:
+        await call.answer("Пользователь не найден.", show_alert=True)
+        return
+        
+    from app.telegram.keyboards.admin import staff_profile_kb
+    username = user.username or "без_юзернейма"
+    text = f"👤 *Профиль сотрудника:*\n\n" \
+           f"• ID: `{user.tg_id}`\n" \
+           f"• Username: @{username}\n" \
+           f"• Роль: {user.role.value}\n" \
+           f"• Целевой KPI: {user.kpi}\n\n" \
+           f"Выберите действие:"
+    
+    await call.message.edit_text(text, parse_mode="Markdown", reply_markup=staff_profile_kb(tg_id))
+
+from app.telegram.states.admin import EditStaffKPIState
+
+@router.callback_query(F.data.startswith("staff_edit_kpi_"))
+async def cb_staff_edit_kpi(call: types.CallbackQuery, state: FSMContext):
+    tg_id = int(call.data.split("_")[3])
+    await state.update_data(target_tg_id=tg_id)
+    await state.set_state(EditStaffKPIState.kpi)
+    await call.message.edit_text("Введите новый KPI (целевое значение в рублях или штуках):", reply_markup=None)
+    await call.bot.send_message(call.message.chat.id, "Или нажмите 'Отмена'", reply_markup=cancel_kb())
+
+@router.message(EditStaffKPIState.kpi)
+async def process_edit_staff_kpi(message: types.Message, state: FSMContext, container: Container):
+    try:
+        new_kpi = int(message.text)
+    except ValueError:
+        await message.answer("Пожалуйста, введите целое число.")
+        return
+        
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    user_service: UserService = container.get("user_service")
+    
+    updated_user = await user_service.update_user_kpi(tg_id, new_kpi)
+    if updated_user:
+        await message.answer(f"✅ KPI успешно обновлен до {new_kpi}!", reply_markup=main_admin_kb())
+    else:
+        await message.answer("❌ Ошибка при обновлении KPI.", reply_markup=main_admin_kb())
+    await state.clear()
+
+@router.callback_query(F.data.startswith("staff_revoke_"))
+async def cb_staff_revoke(call: types.CallbackQuery, container: Container):
+    tg_id = int(call.data.split("_")[2])
+    user_service: UserService = container.get("user_service")
+    
+    updated_user = await user_service.update_user_role(tg_id, UserRole.BANNED)
+    if updated_user:
+        await call.message.edit_text(f"⛔ Сотрудник {tg_id} заблокирован.")
+        try:
+            await call.bot.send_message(tg_id, "Ваш доступ закрыт администратором.")
+        except:
+            pass
+    else:
+        await call.answer("Ошибка", show_alert=True)
+
+@router.callback_query(F.data.startswith("staff_excel_"))
+async def cb_staff_export_excel(call: types.CallbackQuery, container: Container):
+    parts = call.data.split("_")
+    period = parts[2]
+    tg_id = int(parts[3])
+    
+    transaction_service: TransactionService = container.get("transaction_service")
+    user_service: UserService = container.get("user_service")
+    
+    user = await user_service.get_user_by_tg_id(tg_id)
+    user_pk_id = user.id if user else None
+    if not user_pk_id:
+        await call.answer("Пользователь не найден.", show_alert=True)
+        return
+        
+    transactions = await transaction_service.get_admin_statistics(period, user_id=user_pk_id)
+    if not transactions:
+        await call.answer("Нет транзакций за этот период", show_alert=True)
+        return
+        
+    import openpyxl
+    from aiogram.types import BufferedInputFile
+    import io
+    from datetime import datetime
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Продажи"
+    
+    headers = ["ID чека", "Дата/Время (UTC)", "Категория", "Товар", "Кол-во", "Сумма (руб)"]
+    ws.append(headers)
+    
+    for t in transactions:
+        prod_name = t.product.name if t.product else "Удален"
+        cat_name = t.product.category.name if getattr(t.product, 'category', None) else "Не указана"
+        
+        row = [
+            t.id,
+            t.timestamp.strftime("%Y-%m-%d %H:%M:%S") if t.timestamp else "",
+            cat_name,
+            prod_name,
+            t.amount,
+            t.total_price
+        ]
+        ws.append(row)
+        
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    
+    file_name = f"Report_Staff_{user.username or tg_id}_{period}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    file = BufferedInputFile(buf.read(), filename=file_name)
+    
+    await call.message.answer_document(document=file, caption=f"📥 Отчет по сотруднику @{user.username or tg_id} готов!")
+    await call.answer()
+
 
 # --- Statistics ---
 @router.message(F.text == "📊 Статистика")

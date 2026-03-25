@@ -51,3 +51,14 @@ class UserService:
                 await session.commit()
                 return result.scalar_one()
             return None
+
+    async def update_user_kpi(self, tg_id: int, kpi: int) -> User | None:
+        async with self.session_maker() as session:
+            user = await self.get_user_by_tg_id(tg_id)
+            if user:
+                from sqlalchemy import update
+                stmt = update(User).where(User.tg_id == tg_id).values(kpi=kpi).returning(User)
+                result = await session.execute(stmt)
+                await session.commit()
+                return result.scalar_one()
+            return None

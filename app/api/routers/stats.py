@@ -40,6 +40,33 @@ async def get_stats(period: str = "week", container = Depends(get_container)):
         "staff_breakdown": staff_stats
     }
 
+@router.get("/api/inventory")
+async def get_inventory(container = Depends(get_container)):
+    from app.services.product_service import ProductService
+    product_service: ProductService = container.get("product_service")
+    
+    # We need products to be eager loaded with category or we fetch them manually.
+    # ProductService.get_all_products() does not eager load `category`. Let's just return what we have and maybe map category.
+    # To be safe and clean, let's fetch products and categories
+    products = await product_service.get_all_products()
+    from app.services.category_service import CategoryService
+    category_service: CategoryService = container.get("category_service")
+    categories = await category_service.get_all_categories()
+    
+    cat_map = {c.id: c.name for c in categories}
+    
+    inventory_data = []
+    for p in products:
+        inventory_data.append({
+            "id": p.id,
+            "name": p.name,
+            "price": p.price,
+            "quantity": p.quantity,
+            "category": cat_map.get(p.category_id, "Kategoriyasiz")
+        })
+        
+    return {"inventory": inventory_data}
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_view():
     import os

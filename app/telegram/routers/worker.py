@@ -25,18 +25,18 @@ router.callback_query.filter(lambda event, db_user=None: db_user is not None)
 async def worker_start(message: types.Message, db_user: User):
     # If the user is admin, this might get intercepted by admin.py if it's registered first.
     # We will register admin router first.
-    await message.answer(f"Добро пожаловать в панель сотрудника, {db_user.username or db_user.tg_id}!", reply_markup=main_worker_kb())
+    await message.answer(f"Xodimlar paneliga xush kelibsiz, {db_user.username or db_user.tg_id}!", reply_markup=main_worker_kb())
 
-@router.message(F.text == "Отмена")
+@router.message(F.text == "Bekor qilish")
 async def cancel_handler(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("Действие отменено.", reply_markup=main_worker_kb())
+    await message.answer("Amal bekor qilindi.", reply_markup=main_worker_kb())
 
 @router.callback_query(F.data == "cancel_sale")
 async def cancel_sale_cb(call: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await call.message.delete()
-    await call.message.answer("Оформление продажи отменено.", reply_markup=main_worker_kb())
+    await call.message.answer("Sotuvni rasmiylashtirish bekor qilindi.", reply_markup=main_worker_kb())
 
 # --- Sell Logic ---
 @router.message(F.text.regexp(r'^\d{8,14}$'))
@@ -46,32 +46,32 @@ async def process_scanned_barcode(message: types.Message, state: FSMContext, con
     product = await product_service.get_product_by_barcode(barcode)
     
     if not product:
-        await message.answer(f"Товар со штрих-кодом {barcode} не найден.")
+        await message.answer(f"Shtrix-kod {barcode} bo'lgan mahsulot topilmadi.")
         return
         
     if product.quantity == 0:
-        await message.answer(f"Товар *{product.name}* найден, но его нет в наличии (0 шт).", parse_mode="Markdown")
+        await message.answer(f"Mahsulot *{product.name}* topildi, ammo u omborda qolmagan (0 dona).", parse_mode="Markdown")
         return
         
     await state.update_data(product_id=product.id, max_qty=product.quantity, product_name=product.name, price=product.price)
     await message.answer(
-        f"🔍 Найден товар: *{product.name}*\nДоступно: {product.quantity} шт.\n\nВведите количество для продажи:",
+        f"🔍 Mahsulot topildi: *{product.name}*\nOmborda: {product.quantity} dona.\n\nSotish miqdorini kiriting:",
         parse_mode="Markdown",
         reply_markup=cancel_worker_kb()
     )
     await state.set_state(SellState.amount)
 
-@router.message(F.text == "🛒 Оформить продажу")
+@router.message(F.text == "🛒 Sotuvni rasmiylashtirish")
 async def start_sell(message: types.Message, container: Container, state: FSMContext):
     category_service: CategoryService = container.get("category_service")
     categories = await category_service.get_all_categories()
     
     if not categories:
-        await message.answer("Категорий пока нет. Продажи недоступны.")
+        await message.answer("Hozircha kategoriyalar yo'q. Sotuvni amalga oshirib bo'lmaydi.")
         return
         
     await state.set_state(SellState.category_id)
-    await message.answer("Выберите категорию:", reply_markup=worker_categories_kb(categories))
+    await message.answer("Kategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
 
 @router.callback_query(SellState.category_id, F.data.startswith("w_cat_"))
 async def process_sell_cat(call: types.CallbackQuery, state: FSMContext, container: Container):
@@ -106,7 +106,7 @@ async def process_sell_product(call: types.CallbackQuery, state: FSMContext, con
     product = await product_service.get_product_by_id(product_id)
     
     if not product or product.quantity == 0:
-        await call.answer("Этот товар закончился или удален.", show_alert=True)
+        await call.answer("Ushbu mahsulot tugagan yoki o'chirilgan.", show_alert=True)
         # Edit markup
         products = await product_service.get_all_products()
         await call.message.edit_reply_markup(reply_markup=sell_product_list_kb(products))
@@ -115,7 +115,7 @@ async def process_sell_product(call: types.CallbackQuery, state: FSMContext, con
     await state.update_data(product_id=product_id, max_qty=product.quantity, product_name=product.name, price=product.price)
     await call.message.delete()
     await call.message.answer(
-        f"Выбран товар: *{product.name}*\nДоступно: {product.quantity} шт.\n\nВведите количество для продажи:",
+        f"Tanlangan mahsulot: *{product.name}*\nOmborda: {product.quantity} dona.\n\nSotish miqdorini kiriting:",
         parse_mode="Markdown",
         reply_markup=cancel_worker_kb()
     )
@@ -138,7 +138,7 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
     already_in_cart = sum(item['amount'] for item in cart if item['product_id'] == data['product_id'])
     
     if amount + already_in_cart > max_qty:
-        await message.answer(f"Ошибка! Всего на складе {max_qty} шт. В корзине уже {already_in_cart}. Введите количество заново:")
+        await message.answer(f"Xatolik! Omborda jami {max_qty} dona bor. Savatda esa {already_in_cart} dona. Miqdorni qayta kiriting:")
         return
         
     cart.append({
@@ -151,7 +151,7 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
     
     from app.telegram.keyboards.worker import cart_decision_kb
     await message.answer(
-        f"✅ Товар добавлен в чек.\nВсего в чеке: {len(cart)} позиций.\nЧто делаем дальше?", 
+        f"✅ Mahsulot chekka qo'shildi.\nJami chekda: {len(cart)} ta mahsulot.\nKeyingi amalni tanlang?", 
         reply_markup=cart_decision_kb()
     )
     await state.set_state(SellState.checkout_decision)
@@ -197,13 +197,13 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
     total_rub = sum(tx.total_price for tx in transactions)
     total_qty = sum(tx.amount for tx in transactions)
     
-    items_text = "\n".join([f"• {tx.product.name} ({tx.amount} шт) - {tx.total_price} руб." for tx in transactions])
+    items_text = "\n".join([f"• {tx.product.name} ({tx.amount} dona) - {tx.total_price} so'm" for tx in transactions])
     
-    await call.message.edit_text(f"✅ Чек пробит!\n\nТовары:\n{items_text}\n\n*Итого:* {total_rub} руб.", parse_mode="Markdown")
+    await call.message.edit_text(f"✅ Chek chiqarildi!\n\nMahsulotlar:\n{items_text}\n\n*Jami:* {total_rub} so'm", parse_mode="Markdown")
     
     # Notify admin
     worker_name = call.from_user.full_name or call.from_user.username or str(db_user.tg_id)
-    alert_text = f"💰 *Новая продажа (Чек)!*\n\nТовары:\n{items_text}\n\nВсего: {total_qty} шт.\nСумма: {total_rub} руб.\nОформил: {worker_name}"
+    alert_text = f"💰 *Yangi sotuv (Chek)!*\n\nMahsulotlar:\n{items_text}\n\nJami: {total_qty} dona.\nSumma: {total_rub} so'm\nRasmiylashtirdi: {worker_name}"
     
     # Critical Stock Check for all products
     product_service: ProductService = container.get("product_service")
@@ -221,23 +221,23 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
     await state.clear()
 
 # --- Worker Stats ---
-@router.message(F.text == "📈 Мои продажи (смена)")
+@router.message(F.text == "📈 Mening savdo ko'rsatkichlarim")
 async def worker_stats(message: types.Message, container: Container, db_user: User):
     transaction_service: TransactionService = container.get("transaction_service")
     sales = await transaction_service.get_worker_sales_today(user_id=db_user.id)
     
     if not sales:
-        await message.answer("За сегодня продаж пока нет.")
+        await message.answer("Bugun hali sotuvlar amalga oshirilmadi.")
         return
         
     total_items = sum(t.amount for t in sales)
     total_money = sum(t.total_price for t in sales)
     
-    text = f"📈 *Ваши продажи за сегодня:*\n\n"
+    text = f"📈 *Bugungi savdo ko'rsatkichlaringiz:*\n\n"
     for t in sales:
-        product_name = t.product.name if t.product else "Удаленный товар"
-        text += f"• {product_name} ({t.amount} шт) — {t.total_price} руб.\n"
+        product_name = t.product.name if t.product else "O'chirilgan mahsulot"
+        text += f"• {product_name} ({t.amount} dona) — {t.total_price} so'm\n"
         
-    text += f"\n*Итого:* {total_items} шт. на сумму {total_money} руб."
+    text += f"\n*Jami:* {total_items} dona, {total_money} so'm miqdorida."
     
     await message.answer(text, parse_mode="Markdown")

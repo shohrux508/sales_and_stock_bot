@@ -24,6 +24,7 @@ class User(Base):
     tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), default=UserRole.WORKER)
+    kpi: Mapped[int] = mapped_column(Integer, default=0)
 
     # Relationships
     transactions: Mapped[list["Transaction"]] = relationship(

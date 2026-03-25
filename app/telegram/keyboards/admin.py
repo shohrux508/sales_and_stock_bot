@@ -44,9 +44,16 @@ def product_edit_kb(product_id: int) -> InlineKeyboardMarkup:
     builder.button(text="➕ Пополнить (+)", callback_data=f"prod_inc_{product_id}")
     builder.button(text="➖ Уменьшить (-)", callback_data=f"prod_dec_{product_id}")
     builder.button(text="🏷 Привязать штрихкод", callback_data=f"prod_barcode_{product_id}")
-    # builder.button(text="🗑 Удалить", callback_data=f"prod_del_{product_id}")
+    builder.button(text="🗑 Удалить", callback_data=f"prod_del_conf_{product_id}")
     builder.button(text="🔙 Назад к складу", callback_data="back_to_stock")
-    builder.adjust(2, 1, 1)
+    builder.adjust(2, 1, 1, 1)
+    return builder.as_markup()
+
+def product_delete_confirm_kb(product_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Да, удалить", callback_data=f"prod_del_yes_{product_id}")
+    builder.button(text="❌ Нет, оставить", callback_data=f"prod_edit_{product_id}")
+    builder.adjust(1)
     return builder.as_markup()
 
 def cancel_kb() -> ReplyKeyboardMarkup:
@@ -72,4 +79,22 @@ def approve_user_kb(tg_id: int) -> InlineKeyboardMarkup:
 def undo_tx_kb(tx_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="❌ Отменить (Rollback)", callback_data=f"undo_tx_{tx_id}")
+    return builder.as_markup()
+
+def staff_list_kb(workers) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for w in workers:
+        name = w.username or f"ID {w.tg_id}"
+        builder.button(text=f"👤 {name}", callback_data=f"staff_profile_{w.tg_id}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+def staff_profile_kb(tg_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🎯 Изменить KPI", callback_data=f"staff_edit_kpi_{tg_id}")
+    builder.button(text="📥 Отчет Excel (сегодня)", callback_data=f"staff_excel_today_{tg_id}")
+    builder.button(text="📥 Отчет Excel (7 дней)", callback_data=f"staff_excel_week_{tg_id}")
+    builder.button(text="⛔ Заблокировать", callback_data=f"staff_revoke_{tg_id}")
+    builder.button(text="🔙 К списку сотрудников", callback_data="staff_list")
+    builder.adjust(1)
     return builder.as_markup()

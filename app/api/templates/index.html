@@ -267,62 +267,22 @@
         <div id="page-inventory" class="page">
             <header>
                 <div class="brand">
-                    <div class="live-badge" style="background:var(--surface-hover); color:var(--text-muted)"><svg style="width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Demo Holati</div>
+                    <div class="live-badge" style="background:var(--success); color:#fff"><div class="live-dot" style="background:#fff"></div> Jonli Holat</div>
                     <h1>Ombor Holati</h1>
                 </div>
             </header>
 
-            <div class="card-box">
-                <h2>O'z vaqtida to'ldirish kerak (Tanqis)</h2>
-                <div class="list-container">
-                    <div class="list-item">
-                        <div class="item-info">
-                            <div class="item-title">Katta hajmli Coca-Cola 1.5L</div>
-                            <div class="item-meta">Ichimliklar</div>
-                        </div>
-                        <div class="badge bg-danger">Qoldiq: 2 ta</div>
-                    </div>
-                    <div class="list-item">
-                        <div class="item-info">
-                            <div class="item-title">Lays Chips 90g (Cheese)</div>
-                            <div class="item-meta">Yengil tamaddilar</div>
-                        </div>
-                        <div class="badge bg-warning">Qoldiq: 8 ta</div>
-                    </div>
-                    <div class="list-item">
-                        <div class="item-info">
-                            <div class="item-title">Orbit Yalpizli</div>
-                            <div class="item-meta">Shirinliklar</div>
-                        </div>
-                        <div class="badge bg-danger">Qoldiq: 4 ta</div>
-                    </div>
+            <div class="card-box" id="lowStockBox" style="display: none;">
+                <h2 style="color: var(--danger)">Zudlik bilan to'ldirish kerak (Tanqis)</h2>
+                <div class="list-container" id="lowStockList">
+                    <!-- Dynamic -->
                 </div>
             </div>
 
             <div class="card-box">
                 <h2>Yetarli zaxirada</h2>
-                <div class="list-container">
-                    <div class="list-item">
-                        <div class="item-info">
-                            <div class="item-title">Pepsi 1L</div>
-                            <div class="item-meta">Ichimliklar</div>
-                        </div>
-                        <div class="badge bg-success">Qoldiq: 45 ta</div>
-                    </div>
-                    <div class="list-item">
-                        <div class="item-info">
-                            <div class="item-title">Snickers Super</div>
-                            <div class="item-meta">Shirinliklar</div>
-                        </div>
-                        <div class="badge bg-success">Qoldiq: 89 ta</div>
-                    </div>
-                    <div class="list-item">
-                        <div class="item-info">
-                            <div class="item-title">Flash Energy Drink 0.5L</div>
-                            <div class="item-meta">Ichimliklar</div>
-                        </div>
-                        <div class="badge bg-success">Qoldiq: 120 ta</div>
-                    </div>
+                <div class="list-container" id="goodStockList">
+                    <!-- Dynamic -->
                 </div>
             </div>
         </div>
@@ -419,9 +379,63 @@
             });
         }
 
+        // INVENTORY LOGIC
+        async function fetchInventory() {
+            try {
+                const res = await fetch('/api/inventory');
+                const data = await res.json();
+                updateInventoryUI(data.inventory);
+            } catch (e) { console.error("Inventory update failed", e); }
+        }
+
+        function updateInventoryUI(products) {
+            const lowStockList = document.getElementById('lowStockList');
+            const goodStockList = document.getElementById('goodStockList');
+            const lowStockBox = document.getElementById('lowStockBox');
+            
+            lowStockList.innerHTML = '';
+            goodStockList.innerHTML = '';
+            
+            let hasLowStock = false;
+
+            products.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                
+                // Determine badge color
+                let badgeClass = 'bg-success';
+                let isLow = false;
+                if (p.quantity <= 5) { badgeClass = 'bg-danger'; isLow = true; hasLowStock = true; }
+                else if (p.quantity <= 15) { badgeClass = 'bg-warning'; isLow = true; hasLowStock = true; }
+                
+                item.innerHTML = `
+                    <div class="item-info">
+                        <div class="item-title">${p.name}</div>
+                        <div class="item-meta">${p.category} • ${p.price.toLocaleString('uz-UZ')} so'm</div>
+                    </div>
+                    <div class="badge ${badgeClass}">Qoldiq: ${p.quantity} ta</div>
+                `;
+                
+                if (isLow) {
+                    lowStockList.appendChild(item);
+                } else {
+                    goodStockList.appendChild(item);
+                }
+            });
+            
+            lowStockBox.style.display = hasLowStock ? 'block' : 'none';
+            if (goodStockList.children.length === 0) {
+                goodStockList.innerHTML = '<div style="color: var(--text-muted); padding: 10px;">Mahsulot yo\'q</div>';
+            }
+        }
+
         // Real-time: Poll every 10 seconds
-        setInterval(fetchStats, 10000);
+        setInterval(() => {
+            fetchStats();
+            fetchInventory();
+        }, 10000);
         fetchStats();
+        fetchInventory();
     </script>
 </body>
 </html>
