@@ -84,11 +84,11 @@ async def process_sell_cat(call: types.CallbackQuery, state: FSMContext, contain
     available_products = [p for p in products if p.quantity > 0]
     
     if not available_products:
-        await call.answer("В этой категории нет доступных товаров.", show_alert=True)
+        await call.answer("Ushbu kategoriyada mavjud mahsulotlar yo'q.", show_alert=True)
         return
         
     await state.set_state(SellState.product_id)
-    await call.message.edit_text("Выберите товар для продажи:", reply_markup=sell_product_list_kb(available_products))
+    await call.message.edit_text("Sotish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(available_products))
 
 @router.callback_query(F.data == "back_to_w_cats")
 async def process_back_to_w_cats(call: types.CallbackQuery, state: FSMContext, container: Container):
@@ -97,7 +97,7 @@ async def process_back_to_w_cats(call: types.CallbackQuery, state: FSMContext, c
     category_service: CategoryService = container.get("category_service")
     categories = await category_service.get_all_categories()
     await state.set_state(SellState.category_id)
-    await call.message.edit_text("Выберите категорию:", reply_markup=worker_categories_kb(categories))
+    await call.message.edit_text("Kategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
 
 @router.callback_query(F.data.startswith("sell_"))
 async def process_sell_product(call: types.CallbackQuery, state: FSMContext, container: Container):
@@ -128,7 +128,7 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
         if amount <= 0:
             raise ValueError()
     except ValueError:
-        await message.answer("Пожалуйста, введите корректное положительное число.")
+        await message.answer("Iltimos, to'g'ri musbat son kiriting.")
         return
         
     data = await state.get_data()
@@ -163,47 +163,43 @@ async def cart_add_more(call: types.CallbackQuery, state: FSMContext, container:
     category_service: CategoryService = container.get("category_service")
     categories = await category_service.get_all_categories()
     await state.set_state(SellState.category_id)
-    await call.message.edit_text("Выберите категорию:", reply_markup=worker_categories_kb(categories))
+    await call.message.edit_text("Kategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
 
 @router.callback_query(SellState.checkout_decision, F.data == "cart_checkout")
 async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container: Container, db_user: User):
     data = await state.get_data()
     cart = data.get('cart', [])
     if not cart:
-        await call.answer("Корзина пуста!", show_alert=True)
+        await call.answer("Savat bo'sh!", show_alert=True)
         return
         
     import uuid
     order_group_id = str(uuid.uuid4())
     
     transaction_service: TransactionService = container.get("transaction_service")
-    transactions = []
     
-    for item in cart:
-        tx = await transaction_service.create_sale(
-            user_id=db_user.id, 
-            product_id=item['product_id'], 
-            amount=item['amount'],
-            order_group_id=order_group_id
-        )
-        if tx:
-            transactions.append(tx)
+    transactions = await transaction_service.create_bulk_sale(
+        user_id=db_user.id,
+        items=cart,
+        order_group_id=order_group_id
+    )
             
     if not transactions:
-        await call.message.edit_text("Ошибка при оформлении. Возможно, товары закончились.")
+        await call.message.edit_text("Rasmiylashtirishda xatolik. Ehtimol, tovarlar tugagan.")
         await state.clear()
         return
         
     total_rub = sum(tx.total_price for tx in transactions)
     total_qty = sum(tx.amount for tx in transactions)
     
-    items_text = "\n".join([f"• {tx.product.name} ({tx.amount} dona) - {tx.total_price} so'm" for tx in transactions])
+    items_text_worker = "\n".join([f"• {tx.product.name} ({tx.amount} dona) - {tx.total_price} so'm" for tx in transactions])
+    items_text_admin = "\n".join([f"• {tx.product.name} ({tx.amount} шт) - {tx.total_price} руб" for tx in transactions])
     
-    await call.message.edit_text(f"✅ Chek chiqarildi!\n\nMahsulotlar:\n{items_text}\n\n*Jami:* {total_rub} so'm", parse_mode="Markdown")
+    await call.message.edit_text(f"✅ Chek chiqarildi!\n\nMahsulotlar:\n{items_text_worker}\n\n*Jami:* {total_rub} so'm", parse_mode="Markdown")
     
     # Notify admin
     worker_name = call.from_user.full_name or call.from_user.username or str(db_user.tg_id)
-    alert_text = f"💰 *Yangi sotuv (Chek)!*\n\nMahsulotlar:\n{items_text}\n\nJami: {total_qty} dona.\nSumma: {total_rub} so'm\nRasmiylashtirdi: {worker_name}"
+    alert_text = f"💰 *Новая продажа (Чек)!*\n\nТовары:\n{items_text_admin}\n\nИтого: {total_qty} шт.\nСумма: {total_rub} руб\nСотрудник: {worker_name}"
     
     # Critical Stock Check for all products
     product_service: ProductService = container.get("product_service")
@@ -222,7 +218,7 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
     except Exception:
         pass
         
-    await call.message.answer("Выберите:", reply_markup=main_worker_kb())
+    await call.message.answer("Tanlang:", reply_markup=main_worker_kb())
     await state.clear()
 
 # --- Worker Stats ---

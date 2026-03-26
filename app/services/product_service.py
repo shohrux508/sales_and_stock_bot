@@ -13,7 +13,7 @@ class ProductService:
 
     async def get_all_products(self) -> Sequence[Product]:
         async with self.session_maker() as session:
-            stmt = select(Product).order_by(Product.name)
+            stmt = select(Product).where(Product.is_active == 1).order_by(Product.name)
             result = await session.execute(stmt)
             return result.scalars().all()
 
@@ -25,7 +25,7 @@ class ProductService:
             
     async def get_products_by_category(self, category_id: int) -> Sequence[Product]:
         async with self.session_maker() as session:
-            stmt = select(Product).where(Product.category_id == category_id).order_by(Product.name)
+            stmt = select(Product).where(Product.category_id == category_id, Product.is_active == 1).order_by(Product.name)
             result = await session.execute(stmt)
             return result.scalars().all()
 
@@ -65,7 +65,7 @@ class ProductService:
 
     async def delete_product(self, product_id: int) -> bool:
         async with self.session_maker() as session:
-            stmt = delete(Product).where(Product.id == product_id)
+            stmt = update(Product).where(Product.id == product_id).values(is_active=0)
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount > 0

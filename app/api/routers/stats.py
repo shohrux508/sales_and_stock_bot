@@ -1,14 +1,30 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
+from app.config import settings
 import os
 
 router = APIRouter()
+
+security = HTTPBasic()
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, "admin")
+    correct_password = secrets.compare_digest(credentials.password, settings.DASHBOARD_PASSWORD)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 def get_container(request: Request):
     return request.app.state.container
 
 @router.get("/api/stats")
-async def get_stats(period: str = "week", container = Depends(get_container)):
+async def get_stats(period: str = "week", container = Depends(get_container), user: str = Depends(verify_credentials)):
     from app.services.transaction_service import TransactionService
     transaction_service: TransactionService = container.get("transaction_service")
     transactions = await transaction_service.get_admin_statistics(period)
@@ -28,7 +44,7 @@ async def get_stats(period: str = "week", container = Depends(get_container)):
         product_stats[p_name]["revenue"] += t.total_price
         
         u_name = t.user.username or f"ID:{t.user.tg_id}" if t.user else "Tizim"
-        staff_stats[u_name]["count"] += 1
+        staff_stats[u_name]["count"] += t.amount
         staff_stats[u_name]["revenue"] += t.total_price
         
     return {
@@ -41,7 +57,7 @@ async def get_stats(period: str = "week", container = Depends(get_container)):
     }
 
 @router.get("/api/inventory")
-async def get_inventory(container = Depends(get_container)):
+async def get_inventory(container = Depends(get_container), user: str = Depends(verify_credentials)):
     from app.services.product_service import ProductService
     product_service: ProductService = container.get("product_service")
     
@@ -68,7 +84,7 @@ async def get_inventory(container = Depends(get_container)):
     return {"inventory": inventory_data}
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard_view():
+async def dashboard_view(user: str = Depends(verify_credentials)):
     import os
     file_path = os.path.join(os.path.dirname(__file__), "..", "templates", "index.html")
     with open(file_path, "r", encoding="utf-8") as f:

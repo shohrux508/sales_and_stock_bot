@@ -12,20 +12,63 @@ class TransactionService:
     def __init__(self, async_session_maker: async_sessionmaker):
         self.session_maker = async_session_maker
 
+    async def create_bulk_sale(self, user_id: int, items: list[dict], order_group_id: str) -> Sequence[Transaction] | None:
+        """Records multiple sales atomically. Returns None if any item has insufficient stock."""
+        async with self.session_maker() as session:
+            async with session.begin():
+                transactions = []
+                for item in items:
+                    product_id = item['product_id']
+                    amount = item['amount']
+                    
+                    from sqlalchemy import update
+                    stmt = update(Product).where(
+                        Product.id == product_id, 
+                        Product.quantity >= amount,
+                        Product.is_active == 1
+                    ).values(quantity=Product.quantity - amount).returning(Product)
+                    
+                    result = await session.execute(stmt)
+                    product = result.scalar_one_or_none()
+                    
+                    if not product:
+                        return None # Rolled back automatically
+                    
+                    total_price = product.price * amount
+                    
+                    tx = Transaction(
+                        user_id=user_id,
+                        product_id=product_id,
+                        amount=amount,
+                        total_price=total_price,
+                        type=TransactionType.SALE,
+                        order_group_id=order_group_id,
+                        timestamp=datetime.now(timezone.utc).replace(tzinfo=None)
+                    )
+                    session.add(tx)
+                    transactions.append(tx)
+                
+                await session.flush()
+                for tx in transactions:
+                    await session.refresh(tx, attribute_names=['product', 'user'])
+                return transactions
+
     async def create_sale(self, user_id: int, product_id: int, amount: int, order_group_id: str | None = None) -> Transaction | None:
         """Records a sale and deduplicates stock within a single transaction. Returns None if stock is insufficient."""
         async with self.session_maker() as session:
             async with session.begin():
-                # Lock row if needed, but for SQLite simple select is usually enough
-                stmt = select(Product).where(Product.id == product_id)
+                from sqlalchemy import update
+                stmt = update(Product).where(
+                    Product.id == product_id, 
+                    Product.quantity >= amount,
+                    Product.is_active == 1
+                ).values(quantity=Product.quantity - amount).returning(Product)
+                
                 result = await session.execute(stmt)
                 product = result.scalar_one_or_none()
                 
-                if not product or product.quantity < amount:
+                if not product:
                     return None
-                
-                # Deduct stock
-                product.quantity -= amount
                 
                 # Create transaction
                 total_price = product.price * amount
@@ -141,7 +184,7 @@ class TransactionService:
             # Simple fix for now: just use the last 24 hours if "today" is tricky, 
             # but usually start of day in naive UTC is a good enough baseline for small shops.
             # HOWEVER, let's just use naive comparison to CURRENT day to make it "worker-friendly"
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start = datetime.now(timezone.utc).replace(tzinfo=None).replace(hour=0, minute=0, second=0, microsecond=0)
             
             from sqlalchemy.orm import selectinload
             stmt = select(Transaction).options(selectinload(Transaction.product)).where(
@@ -157,7 +200,7 @@ class TransactionService:
         """Returns list of (tg_id, username, total_revenue, total_items) ranked by revenue."""
         async with self.session_maker() as session:
             from datetime import timedelta
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             if period == "today":
                 start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
             else:
@@ -183,7 +226,7 @@ class TransactionService:
         """Gets all sales for administration depending on period (today or week)"""
         async with self.session_maker() as session:
             from datetime import timedelta
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             
             if period == "today":
                 start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
         if env_port:
             self.API_PORT = int(env_port)
     WEBAPP_URL: str = "https://localhost:8000"
+    DASHBOARD_PASSWORD: str = "admin123"
     RUN_TELEGRAM: bool = True
     RUN_API: bool = True
     DATABASE_URL: str = ''

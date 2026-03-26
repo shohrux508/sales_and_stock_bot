@@ -32,7 +32,7 @@ class User(Base):
 
     # Relationships
     transactions: Mapped[list["Transaction"]] = relationship(
-        "Transaction", back_populates="user", cascade="all, delete-orphan"
+        "Transaction", back_populates="user"
     )
 
 class Category(Base):
@@ -54,11 +54,12 @@ class Product(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=0)
     barcode: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    is_active: Mapped[int] = mapped_column(Integer, default=1) # 1 for True, 0 for False (SQLite compatibility)
 
     # Relationships
     category: Mapped["Category"] = relationship("Category", back_populates="products")
     transactions: Mapped[list["Transaction"]] = relationship(
-        "Transaction", back_populates="product", cascade="all, delete-orphan"
+        "Transaction", back_populates="product"
     )
 
 
