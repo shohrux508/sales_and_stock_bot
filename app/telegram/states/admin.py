@@ -30,3 +30,8 @@ class BindBarcodeState(StatesGroup):
 class EditStaffKPIState(StatesGroup):
     target_tg_id = State()
     kpi = State()
+
+class EditStaffProfileState(StatesGroup):
+    target_tg_id = State()
+    full_name = State()
+    phone = State()

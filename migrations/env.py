@@ -1,5 +1,9 @@
 import asyncio
+import os
+from dotenv import load_dotenv
 from logging.config import fileConfig
+
+load_dotenv()
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
@@ -22,9 +26,11 @@ from app.database.core import Base
 import app.database.models  # Ensure models are imported for autogenerate
 target_metadata = Base.metadata
 
-import os
 # Override sqlalchemy.url with our URL from environment
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///app.db")
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 
@@ -77,8 +83,19 @@ async def run_async_migrations() -> None:
         poolclass=pool.NullPool,
     )
 
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            async with connectable.connect() as connection:
+                await connection.run_sync(do_run_migrations)
+            break  # Break out of loop on success
+        except Exception as e:
+            error_message = str(e) + " " + str(getattr(e, 'orig', ''))
+            if "database system is starting up" in error_message and attempt < max_retries - 1:
+                print(f"Database is starting up, retrying in 3 seconds... (Attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(3)
+            else:
+                raise
 
     await connectable.dispose()
 

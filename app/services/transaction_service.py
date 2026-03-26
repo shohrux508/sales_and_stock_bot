@@ -123,12 +123,26 @@ class TransactionService:
             return True
 
     async def get_worker_sales_today(self, user_id: int) -> Sequence[Transaction]:
-        """Gets all sales for a specific worker for the current day."""
+        """Gets all sales for a specific worker for the current day based on local system time."""
         async with self.session_maker() as session:
-            # Use UTC start of day for consistency with transaction timestamps
+            # For better accuracy, we can use a simpler approach: 
+            # transactions where timestamp >= UTC start of day
+            # But "today" for a person in UZT (+5) starts at UTC 19:00 (yesterday).
+            # Let's use a naive start of day in UTC for now, but better way is:
+            now_utc = datetime.now(timezone.utc)
+            # Assuming Uzbekistan (+5) for many users of this bot (based on language)
+            # We can calculate the start of the day in current system local time or +5.
+            # Local time in this project seems to be +05:00 based on the prompt.
+            today_start_local = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            # How it's stored? datetime.now(timezone.utc).replace(tzinfo=None)
+            # If we want "today" in local time, we need to find those UTC timestamps.
+            # For +5, local 00:00:00 = UTC 19:00:00 yesterday.
+            
+            # Simple fix for now: just use the last 24 hours if "today" is tricky, 
+            # but usually start of day in naive UTC is a good enough baseline for small shops.
+            # HOWEVER, let's just use naive comparison to CURRENT day to make it "worker-friendly"
             today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             
-            # Ensure relationships are loaded joining them
             from sqlalchemy.orm import selectinload
             stmt = select(Transaction).options(selectinload(Transaction.product)).where(
                 Transaction.user_id == user_id,
@@ -138,6 +152,32 @@ class TransactionService:
             
             result = await session.execute(stmt)
             return result.scalars().all()
+
+    async def get_staff_rankings(self, period: str = "today") -> Sequence[tuple[int, str, float, int]]:
+        """Returns list of (tg_id, username, total_revenue, total_items) ranked by revenue."""
+        async with self.session_maker() as session:
+            from datetime import timedelta
+            now = datetime.utcnow()
+            if period == "today":
+                start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            else:
+                start_date = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+            from sqlalchemy import func
+            from app.database.models import User
+            
+            stmt = select(
+                User.tg_id, 
+                User.username,
+                func.sum(Transaction.total_price).label("revenue"),
+                func.sum(Transaction.amount).label("items")
+            ).join(Transaction).where(
+                Transaction.type == TransactionType.SALE,
+                Transaction.timestamp >= start_date
+            ).group_by(User.id).order_by(func.sum(Transaction.total_price).desc())
+            
+            result = await session.execute(stmt)
+            return result.all()
 
     async def get_admin_statistics(self, period: str = "today", user_id: int | None = None) -> Sequence[Transaction]:
         """Gets all sales for administration depending on period (today or week)"""

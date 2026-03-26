@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     WEBAPP_URL: str = "https://localhost:8000"
     RUN_TELEGRAM: bool = True
     RUN_API: bool = True
-
+    DATABASE_URL: str = ''
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 settings = Settings()

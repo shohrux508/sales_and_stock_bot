@@ -8,7 +8,7 @@ from app.services.user_service import UserService
 from app.services.category_service import CategoryService
 from app.services.transaction_service import TransactionService
 
-from app.telegram.states.admin import AddProductState, AddCategoryState, WaitAdminReply
+from app.telegram.states.admin import AddProductState, AddCategoryState, WaitAdminReply, EditStaffProfileState
 from app.telegram.keyboards.admin import (
     main_admin_kb, 
     products_list_kb, 
@@ -279,14 +279,64 @@ async def cb_staff_profile(call: types.CallbackQuery, container: Container):
         
     from app.telegram.keyboards.admin import staff_profile_kb
     username = user.username or "без_юзернейма"
+    
+    # Calculate current progress for KPI
+    transaction_service: TransactionService = container.get("transaction_service")
+    # Using 'today' statistics filtered by this user
+    stats_today = await transaction_service.get_admin_statistics("today", user_id=user.id)
+    revenue_today = sum(t.total_price for t in stats_today)
+    
+    status = "✅ Активен" if user.is_active else "⛔ Заблокирован"
+    
     text = f"👤 *Профиль сотрудника:*\n\n" \
            f"• ID: `{user.tg_id}`\n" \
            f"• Username: @{username}\n" \
+           f"• ФИО: {user.full_name or 'не указано'}\n" \
+           f"• Телефон: {user.phone or 'не указано'}\n" \
            f"• Роль: {user.role.value}\n" \
-           f"• Целевой KPI: {user.kpi}\n\n" \
+           f"• Статус: {status}\n" \
+           f"• Регистрация: {user.joined_at.strftime('%Y-%m-%d') if user.joined_at else '---'}\n\n" \
+           f"🎯 *KPI на сегодня:*\n" \
+           f"• Цель: {user.kpi} руб.\n" \
+           f"• Исполнено: {revenue_today} руб.\n" \
+           f"• Прогресс: {min(100, int(revenue_today/user.kpi*100)) if user.kpi > 0 else 0}%\n\n" \
            f"Выберите действие:"
     
     await call.message.edit_text(text, parse_mode="Markdown", reply_markup=staff_profile_kb(tg_id))
+
+@router.callback_query(F.data.startswith("staff_edit_name_"))
+async def cb_staff_edit_name(call: types.CallbackQuery, state: FSMContext):
+    tg_id = int(call.data.split("_")[3])
+    await state.update_data(target_tg_id=tg_id)
+    await state.set_state(EditStaffProfileState.full_name)
+    await call.message.edit_text("Введите ФИО сотрудника:", reply_markup=None)
+    await call.bot.send_message(call.message.chat.id, "Или нажмите 'Отмена'", reply_markup=cancel_kb())
+
+@router.message(EditStaffProfileState.full_name)
+async def process_edit_staff_name(message: types.Message, state: FSMContext, container: Container):
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    user_service: UserService = container.get("user_service")
+    await user_service.update_user_profile(tg_id, full_name=message.text.strip())
+    await message.answer(f"✅ ФИО обновлено!", reply_markup=main_admin_kb())
+    await state.clear()
+
+@router.callback_query(F.data.startswith("staff_edit_phone_"))
+async def cb_staff_edit_phone(call: types.CallbackQuery, state: FSMContext):
+    tg_id = int(call.data.split("_")[3])
+    await state.update_data(target_tg_id=tg_id)
+    await state.set_state(EditStaffProfileState.phone)
+    await call.message.edit_text("Введите номер телефона сотрудника:", reply_markup=None)
+    await call.bot.send_message(call.message.chat.id, "Или нажмите 'Отмена'", reply_markup=cancel_kb())
+
+@router.message(EditStaffProfileState.phone)
+async def process_edit_staff_phone(message: types.Message, state: FSMContext, container: Container):
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    user_service: UserService = container.get("user_service")
+    await user_service.update_user_profile(tg_id, phone=message.text.strip())
+    await message.answer(f"✅ Телефон обновлен!", reply_markup=main_admin_kb())
+    await state.clear()
 
 from app.telegram.states.admin import EditStaffKPIState
 
@@ -421,6 +471,9 @@ async def process_stats(call: types.CallbackQuery, container: Container):
         
     top_products = sorted(product_sales.items(), key=lambda x: x[1]['count'], reverse=True)[:3]
     
+    # Staff rankings
+    rankings = await transaction_service.get_staff_rankings(period)
+    
     period_str = "сегодня" if period == "today" else "последние 7 дней"
     
     text = f"📊 *Статистика за {period_str}:*\n\n"
@@ -432,6 +485,12 @@ async def process_stats(call: types.CallbackQuery, container: Container):
     for rank, (p_name, stats) in enumerate(top_products, 1):
         text += f"{rank}. {p_name} — {stats['count']} шт. ({stats['revenue']} руб.)\n"
         
+    if rankings:
+        text += "\n👥 *Рейтинг сотрудников:*\n"
+        for i, rank in enumerate(rankings, 1):
+            name = rank.username or f"ID {rank.tg_id}"
+            text += f"{i}. {name} — {rank.revenue} руб. ({rank.items} ед.)\n"
+            
     await call.message.edit_text(text, parse_mode="Markdown")
 
 # --- Rollbacks F3 ---
@@ -494,6 +553,41 @@ async def cb_export_excel(call: types.CallbackQuery, container: Container):
     file = BufferedInputFile(buf.read(), filename=file_name)
     
     await call.message.answer_document(document=file, caption="📥 Ваш Excel-отчет готов!")
+    await call.answer()
+
+@router.callback_query(F.data == "export_inventory_excel")
+async def cb_export_inventory_excel(call: types.CallbackQuery, container: Container):
+    product_service: ProductService = container.get("product_service")
+    products = await product_service.get_all_products()
+    
+    if not products:
+        await call.answer("На складе нет товаров.", show_alert=True)
+        return
+        
+    import openpyxl
+    from aiogram.types import BufferedInputFile
+    import io
+    from datetime import datetime
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Склад"
+    
+    headers = ["ID", "Категория", "Наименование", "Цена", "Остаток", "Штрихкод"]
+    ws.append(headers)
+    
+    for p in products:
+        cat_name = p.category.name if p.category else "Без категории"
+        ws.append([p.id, cat_name, p.name, p.price, p.quantity, p.barcode or ""])
+        
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    
+    file_name = f"Inventory_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    file = BufferedInputFile(buf.read(), filename=file_name)
+    
+    await call.message.answer_document(document=file, caption="📦 Актуальный отчет по остаткам на складе готов!")
     await call.answer()
 
 # --- Inventory Management (Receipt & Write-off) ---

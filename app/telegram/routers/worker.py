@@ -238,6 +238,12 @@ async def worker_stats(message: types.Message, container: Container, db_user: Us
         product_name = t.product.name if t.product else "O'chirilgan mahsulot"
         text += f"• {product_name} ({t.amount} dona) — {t.total_price} so'm\n"
         
-    text += f"\n*Jami:* {total_items} dona, {total_money} so'm miqdorida."
+    text += f"\n*Jami:* {total_items} ta mahsulot, {total_money} so'm.\n"
+    
+    if db_user.kpi > 0:
+        progress = int(total_money / db_user.kpi * 100)
+        text += f"\n🎯 *Kunlik reja (KPI):*\n"
+        text += f"• Reja: {db_user.kpi} so'm\n"
+        text += f"• Bajarildi: {total_money} so'm ({progress}%)\n"
     
     await message.answer(text, parse_mode="Markdown")

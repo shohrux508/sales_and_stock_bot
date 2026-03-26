@@ -52,13 +52,24 @@ class UserService:
                 return result.scalar_one()
             return None
 
+    async def update_user_profile(self, tg_id: int, full_name: str | None = None, phone: str | None = None, is_active: bool | None = None) -> User | None:
+        async with self.session_maker() as session:
+            user = await self.get_user_by_tg_id(tg_id)
+            if user:
+                if full_name is not None: user.full_name = full_name
+                if phone is not None: user.phone = phone
+                if is_active is not None: user.is_active = 1 if is_active else 0
+                await session.commit()
+                await session.refresh(user)
+                return user
+            return None
+
     async def update_user_kpi(self, tg_id: int, kpi: int) -> User | None:
         async with self.session_maker() as session:
             user = await self.get_user_by_tg_id(tg_id)
             if user:
-                from sqlalchemy import update
-                stmt = update(User).where(User.tg_id == tg_id).values(kpi=kpi).returning(User)
-                result = await session.execute(stmt)
+                user.kpi = kpi
                 await session.commit()
-                return result.scalar_one()
+                await session.refresh(user)
+                return user
             return None

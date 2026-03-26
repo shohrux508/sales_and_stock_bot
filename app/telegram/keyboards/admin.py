@@ -64,8 +64,8 @@ def stats_periods_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="📅 За сегодня", callback_data="stats_period_today")
     builder.button(text="🗓 За 7 дней", callback_data="stats_period_week")
-    builder.button(text="📥 Отчет Excel (сегодня)", callback_data="export_excel_today")
-    builder.button(text="📥 Отчет Excel (7 дней)", callback_data="export_excel_week")
+    builder.button(text="📥 Отчет Продаж (сегодня)", callback_data="export_excel_today")
+    builder.button(text="📦 Отчет по Складу", callback_data="export_inventory_excel")
     builder.adjust(2, 1, 1)
     return builder.as_markup()
 
@@ -91,10 +91,12 @@ def staff_list_kb(workers) -> InlineKeyboardMarkup:
 
 def staff_profile_kb(tg_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    builder.button(text="📝 Изменить ФИО", callback_data=f"staff_edit_name_{tg_id}")
+    builder.button(text="📞 Изменить Телефон", callback_data=f"staff_edit_phone_{tg_id}")
     builder.button(text="🎯 Изменить KPI", callback_data=f"staff_edit_kpi_{tg_id}")
-    builder.button(text="📥 Отчет Excel (сегодня)", callback_data=f"staff_excel_today_{tg_id}")
-    builder.button(text="📥 Отчет Excel (7 дней)", callback_data=f"staff_excel_week_{tg_id}")
+    builder.button(text="📅 Отчет (сегодня)", callback_data=f"staff_excel_today_{tg_id}")
+    builder.button(text="🗓 Отчет (7 дней)", callback_data=f"staff_excel_week_{tg_id}")
     builder.button(text="⛔ Заблокировать", callback_data=f"staff_revoke_{tg_id}")
     builder.button(text="🔙 К списку сотрудников", callback_data="staff_list")
-    builder.adjust(1)
+    builder.adjust(2, 1, 2, 1, 1)
     return builder.as_markup()

@@ -7,9 +7,16 @@ from sqlalchemy import MetaData
 
 import os
 
-# Construct SQLite URL. Alembic setup will use this or a similar connection string.
-# Using check_same_thread=False for sqlite.
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///app.db")
+# Construct Database URL. 
+# Railway and other providers often provide postgresql:// URLs, 
+# but we need postgresql+asyncpg:// for async SQLAlchemy.
+DATABASE_URL = os.getenv("DATABASE_URL") or settings.DATABASE_URL
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite+aiosqlite:///app.db"
+
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
