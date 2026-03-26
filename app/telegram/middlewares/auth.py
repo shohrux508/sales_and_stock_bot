@@ -30,7 +30,8 @@ class AuthMiddleware(BaseMiddleware):
                 user_service: UserService = container.get("user_service")
                 
                 # Determine default role depending on config
-                default_role = UserRole.ADMIN if user_id == settings.ADMIN_ID else UserRole.WORKER
+                admin_ids = [int(x.strip()) for x in settings.ADMIN_IDS.split(",") if x.strip().isdigit()]
+                default_role = UserRole.ADMIN if user_id in admin_ids else UserRole.PENDING
                 
                 # Retrieve or create user in DB
                 user, created = await user_service.get_or_create_user(user_id, username, default_role)
@@ -39,17 +40,30 @@ class AuthMiddleware(BaseMiddleware):
                 if created and user.role == UserRole.PENDING:
                     from app.telegram.keyboards.admin import approve_user_kb
                     text = f"👤 *Новая заявка на доступ!*\nПользователь: @{user.username or 'без_юзернейма'}\nID: {user.tg_id}"
-                    try:
-                        await event.bot.send_message(settings.ADMIN_ID, text, parse_mode="Markdown", reply_markup=approve_user_kb(user.tg_id))
-                    except Exception:
-                        pass # Ignore if admin didn't start the bot
+                    for admin_id in admin_ids:
+                        try:
+                            await event.bot.send_message(admin_id, text, parse_mode="Markdown", reply_markup=approve_user_kb(user.tg_id))
+                        except Exception:
+                            pass # Ignore if admin didn't start the bot
                 
                 # Role barrier
                 if user.role == UserRole.BANNED:
-                    if isinstance(event, Message):
-                        await event.answer("🚫 Доступ запрещен администратором.")
-                    elif isinstance(event, CallbackQuery):
-                        await event.answer("🚫 Доступ запрещен.", show_alert=True)
+                    if isinstance(event, Message) and event.text == "/start":
+                        await user_service.update_user_role(user.tg_id, UserRole.PENDING)
+                        user.role = UserRole.PENDING
+                        from app.telegram.keyboards.admin import approve_user_kb
+                        text = f"👤 *Повторная заявка на доступ!*\nПользователь: @{user.username or 'без_юзернейма'}\nID: {user.tg_id}"
+                        for admin_id in admin_ids:
+                            try:
+                                await event.bot.send_message(admin_id, text, parse_mode="Markdown", reply_markup=approve_user_kb(user.tg_id))
+                            except Exception:
+                                pass
+                        await event.answer("⏳ Ваша заявка повторно отправлена на рассмотрение. Ожидайте подтверждения от администратора.")
+                    else:
+                        if isinstance(event, Message):
+                            await event.answer("🚫 У вас нет доступа. Введите /start чтобы подать новую заявку.")
+                        elif isinstance(event, CallbackQuery):
+                            await event.answer("🚫 Доступ запрещен.", show_alert=True)
                     return
                 elif user.role == UserRole.PENDING:
                     if isinstance(event, Message):

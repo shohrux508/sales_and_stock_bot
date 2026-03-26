@@ -213,7 +213,12 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
             alert_text += f"\n\n⚠️ *Critical Stock*\nОстаток {prod_after.name}: {prod_after.quantity} шт!"
             
     try:
-        await call.bot.send_message(settings.ADMIN_ID, alert_text, parse_mode="Markdown", reply_markup=undo_tx_kb(transactions[0].id))
+        admin_ids = [int(x.strip()) for x in settings.ADMIN_IDS.split(",") if x.strip().isdigit()]
+        for admin_id in admin_ids:
+            try:
+                await call.bot.send_message(admin_id, alert_text, parse_mode="Markdown", reply_markup=undo_tx_kb(transactions[0].id))
+            except Exception:
+                pass
     except Exception:
         pass
         

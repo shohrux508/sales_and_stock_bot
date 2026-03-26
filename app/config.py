@@ -9,7 +9,7 @@ logging.basicConfig(
 
 class Settings(BaseSettings):
     BOT_TOKEN: str
-    ADMIN_ID: int  # Ensure ADMIN_ID is required
+    ADMIN_IDS: str  # Comma-separated list of admin IDs
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
 

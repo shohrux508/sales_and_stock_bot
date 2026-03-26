@@ -138,8 +138,8 @@ sales_and_stock_bot/
    # Токен Telegram-бота (от @BotFather)
    BOT_TOKEN=1234567890:YOUR_TELEGRAM_BOT_TOKEN
    
-   # Telegram ID Администратора (получить у @userinfo_bot)
-   ADMIN_ID=123456789
+   # Telegram ID Администраторов (через запятую, получить у @userinfo_bot)
+   ADMIN_IDS=123456789,987654321
    
    # Включение модулей
    RUN_TELEGRAM=True

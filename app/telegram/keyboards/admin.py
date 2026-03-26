@@ -96,7 +96,7 @@ def staff_profile_kb(tg_id: int) -> InlineKeyboardMarkup:
     builder.button(text="🎯 Изменить KPI", callback_data=f"staff_edit_kpi_{tg_id}")
     builder.button(text="📅 Отчет (сегодня)", callback_data=f"staff_excel_today_{tg_id}")
     builder.button(text="🗓 Отчет (7 дней)", callback_data=f"staff_excel_week_{tg_id}")
-    builder.button(text="⛔ Заблокировать", callback_data=f"staff_revoke_{tg_id}")
+    builder.button(text="🗑 Удалить/Уволить", callback_data=f"staff_revoke_{tg_id}")
     builder.button(text="🔙 К списку сотрудников", callback_data="staff_list")
     builder.adjust(2, 1, 2, 1, 1)
     return builder.as_markup()

@@ -374,9 +374,9 @@ async def cb_staff_revoke(call: types.CallbackQuery, container: Container):
     
     updated_user = await user_service.update_user_role(tg_id, UserRole.BANNED)
     if updated_user:
-        await call.message.edit_text(f"⛔ Сотрудник {tg_id} заблокирован.")
+        await call.message.edit_text(f"🗑 Сотрудник удален из активного списка. (Чтобы вернуть его, он должен нажать /start)")
         try:
-            await call.bot.send_message(tg_id, "Ваш доступ закрыт администратором.")
+            await call.bot.send_message(tg_id, "Ваш профиль был удален администратором. Ваш доступ закрыт.")
         except:
             pass
     else:
