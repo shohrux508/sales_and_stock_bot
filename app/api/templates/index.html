@@ -316,8 +316,16 @@
 
         async function fetchStats() {
             const period = document.getElementById('periodSelect')?.value || 'week';
+            const urlParams = new URLSearchParams(window.location.search);
+            const user = urlParams.get('user') || 'admin';
+            const pwd = urlParams.get('pwd') || '';
+            
             try {
-                const res = await fetch(`/api/stats?period=${period}`);
+                const headers = {};
+                if (pwd) {
+                    headers['Authorization'] = 'Basic ' + btoa(user + ':' + pwd);
+                }
+                const res = await fetch(`/api/stats?period=${period}`, { headers });
                 const data = await res.json();
                 updateUI(data);
             } catch (e) { console.error("Update failed", e); }
@@ -381,8 +389,16 @@
 
         // INVENTORY LOGIC
         async function fetchInventory() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const user = urlParams.get('user') || 'admin';
+            const pwd = urlParams.get('pwd') || '';
+            
             try {
-                const res = await fetch('/api/inventory');
+                const headers = {};
+                if (pwd) {
+                    headers['Authorization'] = 'Basic ' + btoa(user + ':' + pwd);
+                }
+                const res = await fetch('/api/inventory', { headers });
                 const data = await res.json();
                 updateInventoryUI(data.inventory);
             } catch (e) { console.error("Inventory update failed", e); }

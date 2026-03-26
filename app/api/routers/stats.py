@@ -9,7 +9,16 @@ router = APIRouter()
 
 security = HTTPBasic()
 
-def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+def verify_credentials(
+    credentials: HTTPBasicCredentials = Depends(security),
+    user: str | None = None,
+    pwd: str | None = None
+):
+    # Check query params first (for Telegram WebApp convenience)
+    if user == "admin" and pwd == settings.DASHBOARD_PASSWORD:
+        return "admin"
+        
+    # Standard Basic Auth fallback
     correct_username = secrets.compare_digest(credentials.username, "admin")
     correct_password = secrets.compare_digest(credentials.password, settings.DASHBOARD_PASSWORD)
     if not (correct_username and correct_password):
@@ -24,7 +33,14 @@ def get_container(request: Request):
     return request.app.state.container
 
 @router.get("/api/stats")
-async def get_stats(period: str = "week", container = Depends(get_container), user: str = Depends(verify_credentials)):
+async def get_stats(
+    period: str = "week", 
+    container = Depends(get_container), 
+    user: str = Depends(verify_credentials),
+    # Allow query params to be picked up by verify_credentials via dependency injection
+    u: str | None = None, 
+    p: str | None = None
+):
     from app.services.transaction_service import TransactionService
     transaction_service: TransactionService = container.get("transaction_service")
     transactions = await transaction_service.get_admin_statistics(period)
@@ -57,7 +73,12 @@ async def get_stats(period: str = "week", container = Depends(get_container), us
     }
 
 @router.get("/api/inventory")
-async def get_inventory(container = Depends(get_container), user: str = Depends(verify_credentials)):
+async def get_inventory(
+    container = Depends(get_container), 
+    user: str = Depends(verify_credentials),
+    u: str | None = None, 
+    p: str | None = None
+):
     from app.services.product_service import ProductService
     product_service: ProductService = container.get("product_service")
     
@@ -84,7 +105,11 @@ async def get_inventory(container = Depends(get_container), user: str = Depends(
     return {"inventory": inventory_data}
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard_view(user: str = Depends(verify_credentials)):
+async def dashboard_view(
+    user: str = Depends(verify_credentials),
+    u: str | None = None, 
+    p: str | None = None
+):
     import os
     file_path = os.path.join(os.path.dirname(__file__), "..", "templates", "index.html")
     with open(file_path, "r", encoding="utf-8") as f:

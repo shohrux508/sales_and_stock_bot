@@ -7,7 +7,7 @@ def main_admin_kb() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="📦 Склад"), KeyboardButton(text="🗂 Категории")],
         [KeyboardButton(text="📥 Приемка"), KeyboardButton(text="🗑 Списание")],
         [KeyboardButton(text="👥 Сотрудники"), KeyboardButton(text="📊 Статистика")],
-        [KeyboardButton(text="🌐 Web Dashboard", web_app=WebAppInfo(url=settings.WEBAPP_URL))]
+        [KeyboardButton(text="🌐 Web Dashboard", web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/?user=admin&pwd={settings.DASHBOARD_PASSWORD}"))]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
