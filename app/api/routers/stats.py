@@ -56,7 +56,7 @@ async def get_stats(
     staff_stats = defaultdict(lambda: {"count": 0, "revenue": 0})
     
     for t in transactions:
-        p_name = t.product.name if t.product else "Удаленный товар"
+        p_name = t.product.name if t.product else "O'chirilgan mahsulot"
         product_stats[p_name]["count"] += t.amount
         product_stats[p_name]["revenue"] += t.total_price
         

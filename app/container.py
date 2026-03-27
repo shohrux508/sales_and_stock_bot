@@ -16,7 +16,7 @@ class Container:
         return self._services[name]
         
     def resolve(self, name: str) -> Callable:
-        """Метод для использования в FastAPI Depends()"""
+        """FastAPI Depends() da foydalanish uchun metod"""
         def _resolve(request: Request) -> Any:
             return request.app.state.container.get(name)
         return _resolve

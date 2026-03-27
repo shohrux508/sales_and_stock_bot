@@ -43,7 +43,7 @@ class AuthMiddleware(BaseMiddleware):
                 # Notify admin if someone new registered as PENDING
                 if created and user.role == UserRole.PENDING:
                     from app.telegram.keyboards.admin import approve_user_kb
-                    text = f"👤 *Новая заявка на доступ!*\nПользователь: @{user.username or 'без_юзернейма'}\nID: {user.tg_id}"
+                    text = f"👤 *Yangi ruxsat so'rovi!*\nFoydalanuvchi: @{user.username or 'username_yoq'}\nID: {user.tg_id}"
                     for admin_id in admin_ids:
                         try:
                             await event.bot.send_message(admin_id, text, parse_mode="Markdown", reply_markup=approve_user_kb(user.tg_id))
@@ -56,24 +56,24 @@ class AuthMiddleware(BaseMiddleware):
                         await user_service.update_user_role(user.tg_id, UserRole.PENDING)
                         user.role = UserRole.PENDING
                         from app.telegram.keyboards.admin import approve_user_kb
-                        text = f"👤 *Повторная заявка на доступ!*\nПользователь: @{user.username or 'без_юзернейма'}\nID: {user.tg_id}"
+                        text = f"👤 *Ruxsat uchun qayta so'rov!*\nFoydalanuvchi: @{user.username or 'username_yoq'}\nID: {user.tg_id}"
                         for admin_id in admin_ids:
                             try:
                                 await event.bot.send_message(admin_id, text, parse_mode="Markdown", reply_markup=approve_user_kb(user.tg_id))
                             except Exception:
                                 pass
-                        await event.answer("⏳ Ваша заявка повторно отправлена на рассмотрение. Ожидайте подтверждения от администратора.")
+                        await event.answer("⏳ Sizning so'rovingiz qayta ko'rib chiqish uchun yuborildi. Administrator tasdiqlashini kuting.")
                     else:
                         if isinstance(event, Message):
-                            await event.answer("🚫 У вас нет доступа. Введите /start чтобы подать новую заявку.")
+                            await event.answer("🚫 Sizda ruxsat yo'q. Yangi so'rov yuborish uchun /start ni bosing.")
                         elif isinstance(event, CallbackQuery):
-                            await event.answer("🚫 Доступ запрещен.", show_alert=True)
+                            await event.answer("🚫 Ruxsat etilmagan.", show_alert=True)
                     return
                 elif user.role == UserRole.PENDING:
                     if isinstance(event, Message):
-                        await event.answer("⏳ Ваша заявка находится на рассмотрении. Ожидайте подтверждения от администратора.")
+                        await event.answer("⏳ Sizning so'rovingiz ko'rib chiqilmoqda. Administrator tasdiqlashini kuting.")
                     elif isinstance(event, CallbackQuery):
-                        await event.answer("⏳ Ваша заявка на модерации.", show_alert=True)
+                        await event.answer("⏳ Sizning so'rovingiz moderatsiyada.", show_alert=True)
                     return
                 
                 # Pass the db user object to the handler if passed the barrier

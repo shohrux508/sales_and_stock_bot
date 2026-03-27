@@ -193,20 +193,20 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
     total_qty = sum(tx.amount for tx in transactions)
     
     items_text_worker = "\n".join([f"• {tx.product.name} ({tx.amount} dona) - {tx.total_price} so'm" for tx in transactions])
-    items_text_admin = "\n".join([f"• {tx.product.name} ({tx.amount} шт) - {tx.total_price} руб" for tx in transactions])
+    items_text_admin = "\n".join([f"• {tx.product.name} ({tx.amount} dona) - {tx.total_price} so'm" for tx in transactions])
     
     await call.message.edit_text(f"✅ Chek chiqarildi!\n\nMahsulotlar:\n{items_text_worker}\n\n*Jami:* {total_rub} so'm", parse_mode="Markdown")
     
     # Notify admin
     worker_name = call.from_user.full_name or call.from_user.username or str(db_user.tg_id)
-    alert_text = f"💰 *Новая продажа (Чек)!*\n\nТовары:\n{items_text_admin}\n\nИтого: {total_qty} шт.\nСумма: {total_rub} руб\nСотрудник: {worker_name}"
+    alert_text = f"💰 *Yangi sotuv (Chek)!*\n\nMahsulotlar:\n{items_text_admin}\n\nJami: {total_qty} dona.\nSumma: {total_rub} so'm\nXodim: {worker_name}"
     
     # Critical Stock Check for all products
     product_service: ProductService = container.get("product_service")
     for tx in transactions:
         prod_after = await product_service.get_product_by_id(tx.product_id)
         if prod_after and prod_after.quantity < 5:
-            alert_text += f"\n\n⚠️ *Critical Stock*\nОстаток {prod_after.name}: {prod_after.quantity} шт!"
+            alert_text += f"\n\n⚠️ *Kritik qoldiq*\nOmborda {prod_after.name}: {prod_after.quantity} dona!"
             
     try:
         admin_ids = [int(x.strip()) for x in settings.ADMIN_IDS.split(",") if x.strip().isdigit()]
