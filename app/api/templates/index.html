@@ -317,15 +317,12 @@
         async function fetchStats() {
             const period = document.getElementById('periodSelect')?.value || 'week';
             const urlParams = new URLSearchParams(window.location.search);
-            const user = urlParams.get('user') || 'admin';
-            const pwd = urlParams.get('pwd') || '';
+            const u = urlParams.get('u') || urlParams.get('user') || 'admin';
+            const p = urlParams.get('p') || urlParams.get('pwd') || '';
             
             try {
-                const headers = {};
-                if (pwd) {
-                    headers['Authorization'] = 'Basic ' + btoa(user + ':' + pwd);
-                }
-                const res = await fetch(`/api/stats?period=${period}`, { headers });
+                // We pass u and p as query params since the backend now supports them
+                const res = await fetch(`/api/stats?period=${period}&u=${u}&p=${p}`);
                 const data = await res.json();
                 updateUI(data);
             } catch (e) { console.error("Update failed", e); }
@@ -390,15 +387,11 @@
         // INVENTORY LOGIC
         async function fetchInventory() {
             const urlParams = new URLSearchParams(window.location.search);
-            const user = urlParams.get('user') || 'admin';
-            const pwd = urlParams.get('pwd') || '';
+            const u = urlParams.get('u') || urlParams.get('user') || 'admin';
+            const p = urlParams.get('p') || urlParams.get('pwd') || '';
             
             try {
-                const headers = {};
-                if (pwd) {
-                    headers['Authorization'] = 'Basic ' + btoa(user + ':' + pwd);
-                }
-                const res = await fetch('/api/inventory', { headers });
+                const res = await fetch(`/api/inventory?u=${u}&p=${p}`);
                 const data = await res.json();
                 updateInventoryUI(data.inventory);
             } catch (e) { console.error("Inventory update failed", e); }
