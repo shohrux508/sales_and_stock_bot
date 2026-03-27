@@ -3,6 +3,8 @@ from sqlalchemy import select, update, delete
 from typing import Sequence
 import logging
 
+from sqlalchemy.orm import selectinload
+
 from app.database.models import Product
 
 logger = logging.getLogger(__name__)
@@ -13,19 +15,19 @@ class ProductService:
 
     async def get_all_products(self) -> Sequence[Product]:
         async with self.session_maker() as session:
-            stmt = select(Product).where(Product.is_active == 1).order_by(Product.name)
+            stmt = select(Product).options(selectinload(Product.category)).where(Product.is_active == 1).order_by(Product.name)
             result = await session.execute(stmt)
             return result.scalars().all()
 
     async def get_product_by_id(self, product_id: int) -> Product | None:
         async with self.session_maker() as session:
-            stmt = select(Product).where(Product.id == product_id)
+            stmt = select(Product).options(selectinload(Product.category)).where(Product.id == product_id)
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
             
     async def get_products_by_category(self, category_id: int) -> Sequence[Product]:
         async with self.session_maker() as session:
-            stmt = select(Product).where(Product.category_id == category_id, Product.is_active == 1).order_by(Product.name)
+            stmt = select(Product).options(selectinload(Product.category)).where(Product.category_id == category_id, Product.is_active == 1).order_by(Product.name)
             result = await session.execute(stmt)
             return result.scalars().all()
 
@@ -59,7 +61,7 @@ class ProductService:
 
     async def get_product_by_barcode(self, barcode: str) -> Product | None:
         async with self.session_maker() as session:
-            stmt = select(Product).where(Product.barcode == barcode)
+            stmt = select(Product).options(selectinload(Product.category)).where(Product.barcode == barcode)
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
