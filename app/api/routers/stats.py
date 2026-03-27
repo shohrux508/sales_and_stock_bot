@@ -7,27 +7,30 @@ import os
 
 router = APIRouter()
 
-security = HTTPBasic()
+security = HTTPBasic(auto_error=False)
 
 def verify_credentials(
-    credentials: HTTPBasicCredentials = Depends(security),
-    user: str | None = None,
-    pwd: str | None = None
+    credentials: HTTPBasicCredentials | None = Depends(security),
+    u: str | None = None,
+    p: str | None = None
 ):
     # Check query params first (for Telegram WebApp convenience)
-    if user == "admin" and pwd == settings.DASHBOARD_PASSWORD:
+    if u == "admin" and p == settings.DASHBOARD_PASSWORD:
         return "admin"
         
     # Standard Basic Auth fallback
-    correct_username = secrets.compare_digest(credentials.username, "admin")
-    correct_password = secrets.compare_digest(credentials.password, settings.DASHBOARD_PASSWORD)
-    if not (correct_username and correct_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
+    if credentials:
+        correct_username = secrets.compare_digest(credentials.username, "admin")
+        correct_password = secrets.compare_digest(credentials.password, settings.DASHBOARD_PASSWORD)
+        if correct_username and correct_password:
+            return credentials.username
+
+    # Not authenticated: raise 401 with challenge
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": 'Basic realm="Sales Dashboard"'},
+    )
 
 def get_container():
     # Helper backward compat if needed, but not used now
@@ -37,9 +40,7 @@ def get_container():
 async def get_stats(
     request: Request,
     period: str = "week", 
-    user: str = Depends(verify_credentials),
-    u: str | None = None, 
-    p: str | None = None
+    user: str = Depends(verify_credentials)
 ):
     from app.services.transaction_service import TransactionService
     transaction_service: TransactionService = request.app.state.container.get("transaction_service")
@@ -75,9 +76,7 @@ async def get_stats(
 @router.get("/api/inventory")
 async def get_inventory(
     request: Request,
-    user: str = Depends(verify_credentials),
-    u: str | None = None, 
-    p: str | None = None
+    user: str = Depends(verify_credentials)
 ):
     from app.services.product_service import ProductService
     product_service: ProductService = request.app.state.container.get("product_service")
@@ -106,9 +105,7 @@ async def get_inventory(
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_view(
-    user: str = Depends(verify_credentials),
-    u: str | None = None, 
-    p: str | None = None
+    user: str = Depends(verify_credentials)
 ):
     import os
     file_path = os.path.join(os.path.dirname(__file__), "..", "templates", "index.html")
