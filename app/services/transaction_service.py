@@ -43,7 +43,7 @@ class TransactionService:
                         total_price=total_price,
                         type=TransactionType.SALE,
                         order_group_id=order_group_id,
-                        timestamp=datetime.now(timezone.utc).replace(tzinfo=None)
+                        timestamp=datetime.now(timezone.utc)
                     )
                     session.add(tx)
                     transactions.append(tx)
@@ -79,7 +79,7 @@ class TransactionService:
                     total_price=total_price,
                     type=TransactionType.SALE,
                     order_group_id=order_group_id,
-                    timestamp=datetime.now(timezone.utc).replace(tzinfo=None) # SQLite compatibility
+                    timestamp=datetime.now(timezone.utc)
                 )
                 
                 session.add(transaction)
@@ -107,7 +107,7 @@ class TransactionService:
                     amount=amount,
                     total_price=total_price,
                     type=TransactionType.RECEIPT,
-                    timestamp=datetime.now(timezone.utc).replace(tzinfo=None)
+                    timestamp=datetime.now(timezone.utc)
                 )
                 session.add(transaction)
                 await session.flush()
@@ -133,7 +133,7 @@ class TransactionService:
                     total_price=total_price,
                     type=TransactionType.WRITE_OFF,
                     reason=reason,
-                    timestamp=datetime.now(timezone.utc).replace(tzinfo=None)
+                    timestamp=datetime.now(timezone.utc)
                 )
                 session.add(transaction)
                 await session.flush()
@@ -184,7 +184,7 @@ class TransactionService:
             # Simple fix for now: just use the last 24 hours if "today" is tricky, 
             # but usually start of day in naive UTC is a good enough baseline for small shops.
             # HOWEVER, let's just use naive comparison to CURRENT day to make it "worker-friendly"
-            today_start = datetime.now(timezone.utc).replace(tzinfo=None).replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             
             from sqlalchemy.orm import selectinload
             stmt = select(Transaction).options(selectinload(Transaction.product)).where(
@@ -200,7 +200,7 @@ class TransactionService:
         """Returns list of (tg_id, username, total_revenue, total_items) ranked by revenue."""
         async with self.session_maker() as session:
             from datetime import timedelta
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            now = datetime.now(timezone.utc)
             if period == "today":
                 start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
             else:
@@ -226,7 +226,7 @@ class TransactionService:
         """Gets all sales for administration depending on period (today or week)"""
         async with self.session_maker() as session:
             from datetime import timedelta
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            now = datetime.now(timezone.utc)
             
             if period == "today":
                 start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
