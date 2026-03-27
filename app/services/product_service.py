@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy import select, update, delete
+from sqlalchemy.orm import joinedload
 from typing import Sequence
 import logging
 
@@ -13,7 +14,12 @@ class ProductService:
 
     async def get_all_products(self) -> Sequence[Product]:
         async with self.session_maker() as session:
-            stmt = select(Product).where(Product.is_active == 1).order_by(Product.name)
+            stmt = (
+                select(Product)
+                .where(Product.is_active == 1)
+                .order_by(Product.name)
+                .options(joinedload(Product.category))
+            )
             result = await session.execute(stmt)
             return result.scalars().all()
 
