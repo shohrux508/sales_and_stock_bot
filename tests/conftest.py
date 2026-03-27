@@ -4,6 +4,8 @@ import pytest_asyncio
 
 # Set variable BEFORE any app import so that SQLAlchemy uses aiosqlite
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["BOT_TOKEN"] = "123456789:ABCDEF"
+os.environ["ADMIN_IDS"] = "123,456"
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from app.database.core import Base, engine
