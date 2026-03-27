@@ -248,24 +248,29 @@ async def show_staff(message: types.Message, container: Container):
     user_service: UserService = container.get("user_service")
     
     users = await user_service.get_all_users()
-    workers = [u for u in users if u.role == UserRole.WORKER]
+    # List Workers, Pending, and BANNED to make management easier
+    workers = [u for u in users if u.role in [UserRole.WORKER, UserRole.PENDING, UserRole.BANNED]]
     
     if not workers:
-        text = "Сотрудников пока нет."
+        text = "Сотрудников и заявок пока нет."
         await message.answer(text, reply_markup=main_admin_kb())
     else:
         from app.telegram.keyboards.admin import staff_list_kb
-        text = "👥 Выберите сотрудника для просмотра профиля:"
+        text = "👥 Выберите сотрудника или кандидата для управления:"
         await message.answer(text, reply_markup=staff_list_kb(workers))
 
 @router.callback_query(F.data == "staff_list")
 async def cb_staff_list(call: types.CallbackQuery, container: Container):
     user_service: UserService = container.get("user_service")
     users = await user_service.get_all_users()
-    workers = [u for u in users if u.role == UserRole.WORKER]
+    workers = [u for u in users if u.role in [UserRole.WORKER, UserRole.PENDING, UserRole.BANNED]]
     
+    if not workers:
+        await call.message.edit_text("Сотрудников и заявок пока нет.", reply_markup=None)
+        return
+        
     from app.telegram.keyboards.admin import staff_list_kb
-    text = "👥 Выберите сотрудника для просмотра профиля:"
+    text = "👥 Выберите сотрудника или кандидата для управления:"
     await call.message.edit_text(text, reply_markup=staff_list_kb(workers))
 
 @router.callback_query(F.data.startswith("staff_profile_"))
@@ -278,31 +283,38 @@ async def cb_staff_profile(call: types.CallbackQuery, container: Container):
         return
         
     from app.telegram.keyboards.admin import staff_profile_kb
-    username = user.username or "без_юзернейма"
+    
+    # Escape simple characters for Markdown
+    def escape_md(text):
+        if not text: return "---"
+        return str(text).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
+        
+    username = escape_md(user.username)
+    full_name = escape_md(user.full_name)
     
     # Calculate current progress for KPI
     transaction_service: TransactionService = container.get("transaction_service")
-    # Using 'today' statistics filtered by this user
     stats_today = await transaction_service.get_admin_statistics("today", user_id=user.id)
     revenue_today = sum(t.total_price for t in stats_today)
     
     status = "✅ Активен" if user.is_active else "⛔ Заблокирован"
+    if user.role == UserRole.PENDING:
+        status = "⏳ Ожидает одобрения"
     
-    text = f"👤 *Профиль сотрудника:*\n\n" \
+    text = f"👤 *Профиль:* {full_name}\n\n" \
            f"• ID: `{user.tg_id}`\n" \
            f"• Username: @{username}\n" \
-           f"• ФИО: {user.full_name or 'не указано'}\n" \
-           f"• Телефон: {user.phone or 'не указано'}\n" \
+           f"• Телефон: {escape_md(user.phone)}\n" \
            f"• Роль: {user.role.value}\n" \
            f"• Статус: {status}\n" \
            f"• Регистрация: {user.joined_at.strftime('%Y-%m-%d') if user.joined_at else '---'}\n\n" \
            f"🎯 *KPI на сегодня:*\n" \
            f"• Цель: {user.kpi} руб.\n" \
-           f"• Исполнено: {revenue_today} руб.\n" \
+           f"• Выручка: {round(revenue_today, 2)} руб.\n" \
            f"• Прогресс: {min(100, int(revenue_today/user.kpi*100)) if user.kpi > 0 else 0}%\n\n" \
            f"Выберите действие:"
     
-    await call.message.edit_text(text, parse_mode="Markdown", reply_markup=staff_profile_kb(tg_id))
+    await call.message.edit_text(text, parse_mode="Markdown", reply_markup=staff_profile_kb(tg_id, user.role))
 
 @router.callback_query(F.data.startswith("staff_edit_name_"))
 async def cb_staff_edit_name(call: types.CallbackQuery, state: FSMContext):

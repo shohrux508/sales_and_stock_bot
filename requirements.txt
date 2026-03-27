@@ -9,3 +9,8 @@ aiosqlite
 alembic
 openpyxl>=3.1.2
 asyncpg
+pytest-asyncio
+pytest-cov
+httpx
+redis
+loguru

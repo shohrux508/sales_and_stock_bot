@@ -5,33 +5,7 @@ from app.database.models import Base, User, Product, Category, Transaction, Tran
 from app.services.transaction_service import TransactionService
 from app.services.product_service import ProductService
 
-@pytest_asyncio.fixture
-async def async_session_maker():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    session_maker = async_sessionmaker(engine, expire_on_commit=False)
-    
-    # seeding data
-    async with session_maker() as session:
-        user = User(tg_id=123, role=UserRole.ADMIN)
-        category = Category(name="Test Category")
-        session.add(user)
-        session.add(category)
-        await session.commit()
-        await session.refresh(user)
-        await session.refresh(category)
-        
-        product = Product(name="Test Product", price=100.0, category_id=category.id, quantity=10, barcode="123456")
-        session.add(product)
-        await session.commit()
-    
-    yield session_maker
-    
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+
 
 @pytest.mark.asyncio
 async def test_create_receipt(async_session_maker):

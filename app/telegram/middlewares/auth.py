@@ -36,6 +36,10 @@ class AuthMiddleware(BaseMiddleware):
                 # Retrieve or create user in DB
                 user, created = await user_service.get_or_create_user(user_id, username, default_role)
                 
+                # If user exists but is in ADMIN_IDS and not ADMIN, auto-promote
+                if not created and user.role != UserRole.ADMIN and user_id in admin_ids:
+                    user = await user_service.update_user_role(user_id, UserRole.ADMIN)
+                
                 # Notify admin if someone new registered as PENDING
                 if created and user.role == UserRole.PENDING:
                     from app.telegram.keyboards.admin import approve_user_kb

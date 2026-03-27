@@ -1,4 +1,5 @@
-from typing import Any, Dict
+from typing import Any, Dict, Callable
+from fastapi import Request
 
 class Container:
     def __init__(self):
@@ -13,3 +14,9 @@ class Container:
         if name not in self._services:
             raise ValueError(f"Service '{name}' not found")
         return self._services[name]
+        
+    def resolve(self, name: str) -> Callable:
+        """Метод для использования в FastAPI Depends()"""
+        def _resolve(request: Request) -> Any:
+            return request.app.state.container.get(name)
+        return _resolve

@@ -2,6 +2,9 @@ import asyncio
 import logging
 import sys
 from app.app import App
+from app.logger import setup_logging
+
+setup_logging()
 
 async def main():
     app = App()

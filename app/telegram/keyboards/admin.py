@@ -1,6 +1,7 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.config import settings
+from app.database.models import UserRole
 
 def main_admin_kb() -> ReplyKeyboardMarkup:
     kb = [
@@ -84,19 +85,45 @@ def undo_tx_kb(tx_id: int) -> InlineKeyboardMarkup:
 def staff_list_kb(workers) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for w in workers:
+        role_label = ""
+        if w.role == UserRole.PENDING:
+            role_label = " (⏳ заявка)"
+        elif w.role == UserRole.BANNED:
+            role_label = " (🚫 забан)"
+            
         name = w.username or f"ID {w.tg_id}"
-        builder.button(text=f"👤 {name}", callback_data=f"staff_profile_{w.tg_id}")
+        builder.button(text=f"👤 {name}{role_label}", callback_data=f"staff_profile_{w.tg_id}")
     builder.adjust(1)
     return builder.as_markup()
 
-def staff_profile_kb(tg_id: int) -> InlineKeyboardMarkup:
+def staff_profile_kb(tg_id: int, role: UserRole) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    
+    # If the user is pending, show approve/reject buttons first
+    if role == UserRole.PENDING:
+        builder.button(text="✅ Одобрить", callback_data=f"approve_{tg_id}")
+        builder.button(text="⛔ Отклонить", callback_data=f"reject_{tg_id}")
+    elif role == UserRole.BANNED:
+        builder.button(text="✅ Вернуть доступ (WORKER)", callback_data=f"approve_{tg_id}")
+    
     builder.button(text="📝 Изменить ФИО", callback_data=f"staff_edit_name_{tg_id}")
     builder.button(text="📞 Изменить Телефон", callback_data=f"staff_edit_phone_{tg_id}")
     builder.button(text="🎯 Изменить KPI", callback_data=f"staff_edit_kpi_{tg_id}")
     builder.button(text="📅 Отчет (сегодня)", callback_data=f"staff_excel_today_{tg_id}")
     builder.button(text="🗓 Отчет (7 дней)", callback_data=f"staff_excel_week_{tg_id}")
-    builder.button(text="🗑 Удалить/Уволить", callback_data=f"staff_revoke_{tg_id}")
+    
+    if role == UserRole.WORKER:
+        builder.button(text="🗑 Удалить/Уволить", callback_data=f"staff_revoke_{tg_id}")
+        
     builder.button(text="🔙 К списку сотрудников", callback_data="staff_list")
-    builder.adjust(2, 1, 2, 1, 1)
+    
+    # Calculate row adjustment: 
+    # If pending: 2 (approve/reject), then the rest
+    if role == UserRole.PENDING:
+        builder.adjust(2, 2, 1, 2, 1, 1)
+    elif role == UserRole.BANNED:
+        builder.adjust(1, 2, 1, 2, 1, 1)
+    else:
+        builder.adjust(2, 1, 2, 1, 1)
+        
     return builder.as_markup()
