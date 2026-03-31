@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from dotenv import load_dotenv
 from logging.config import fileConfig
@@ -20,6 +21,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+logger = logging.getLogger("alembic.env")
+
 # add your model's MetaData object here
 # for 'autogenerate' support
 from app.database.core import Base
@@ -32,6 +35,14 @@ if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
+
+# Explicitly set version_locations so Alembic always resolves migration files
+# relative to this env.py, regardless of the working directory.
+_here = os.path.dirname(os.path.abspath(__file__))
+_versions_dir = os.path.join(_here, "versions")
+config.set_main_option("version_locations", _versions_dir)
+logger.info("Alembic version_locations set to: %s", _versions_dir)
+logger.info("Alembic sqlalchemy.url driver: %s", DATABASE_URL.split("://")[0])
 
 
 # other values from the config, defined by the needs of env.py,
