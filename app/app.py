@@ -16,6 +16,8 @@ class App:
 
     def setup_services(self):
         logger.info("Setting up services...")
+        from app.services.example_service import ExampleService
+        self.container.register("example_service", ExampleService())
         self.container.register("user_service", UserService(async_session_maker))
         self.container.register("product_service", ProductService(async_session_maker))
         self.container.register("transaction_service", TransactionService(async_session_maker))
