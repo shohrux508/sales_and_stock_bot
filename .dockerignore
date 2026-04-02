@@ -12,3 +12,4 @@ README.md
 GUIDE.md
 docker-compose.yml
 .env
+printer_client

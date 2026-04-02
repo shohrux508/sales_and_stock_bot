@@ -3,16 +3,23 @@ from fastapi import FastAPI
 from app.config import settings
 from app.container import Container
 from app.api.routers import example
+from app.api.printer_manager import PrinterConnectionManager
 
-def create_app(container: Container, bot=None, dp=None) -> FastAPI:
+def create_app(container: Container, bot=None, dp=None, printer_manager: PrinterConnectionManager = None) -> FastAPI:
     app = FastAPI()
     app.state.container = container
     app.state.bot = bot
     app.state.dp = dp
     
-    from app.api.routers import example, stats
+    # Инициализация менеджера принтеров
+    if printer_manager is None:
+        printer_manager = PrinterConnectionManager()
+    app.state.printer_manager = printer_manager
+    
+    from app.api.routers import example, stats, printer
     app.include_router(example.router)
     app.include_router(stats.router)
+    app.include_router(printer.router)
     
     if bot and dp and settings.WEBHOOK_URL:
         from aiogram import types
@@ -39,8 +46,8 @@ def create_app(container: Container, bot=None, dp=None) -> FastAPI:
 
     return app
 
-async def start_api(container: Container, bot=None, dp=None):
-    app = create_app(container, bot, dp)
+async def start_api(container: Container, bot=None, dp=None, printer_manager=None):
+    app = create_app(container, bot, dp, printer_manager)
     config = uvicorn.Config(
         app, 
         host=settings.API_HOST, 

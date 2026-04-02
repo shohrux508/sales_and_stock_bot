@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     RUN_API: bool = True
     DATABASE_URL: str = ''
     REDIS_URL: str = "redis://localhost:6379/0"
+    PRINTER_SECRET_TOKEN: str = "change-me-to-secure-token"
     WEBHOOK_URL: str = ""
     WEBHOOK_PATH: str = "/webhook"
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

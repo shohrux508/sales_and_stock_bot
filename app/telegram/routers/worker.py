@@ -197,8 +197,31 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
     
     await call.message.edit_text(f"✅ Chek chiqarildi!\n\nMahsulotlar:\n{items_text_worker}\n\n*Jami:* {total_rub} so'm", parse_mode="Markdown")
     
-    # Notify admin
+    # --- TRIGGER PRINT ---
     worker_name = call.from_user.full_name or call.from_user.username or str(db_user.tg_id)
+    
+    from datetime import datetime
+    print_data = {
+        "order_id": order_group_id,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "worker_name": worker_name,
+        "items": [
+            {
+                "name": tx.product.name,
+                "quantity": tx.amount,
+                "price": tx.product.price,
+                "sum": tx.total_price
+            } for tx in transactions
+        ],
+        "total_amount": total_rub,
+        "currency": "UZS"
+    }
+    
+    from app.api.printer_manager import PrinterConnectionManager
+    printer_manager: PrinterConnectionManager = container.get("printer_manager")
+    print_sent = await printer_manager.send_print_job(print_data)
+    
+    # Notify admin
     alert_text = f"💰 *Yangi sotuv (Chek)!*\n\nMahsulotlar:\n{items_text_admin}\n\nJami: {total_qty} dona.\nSumma: {total_rub} so'm\nXodim: {worker_name}"
     
     # Critical Stock Check for all products
@@ -207,12 +230,22 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
         prod_after = await product_service.get_product_by_id(tx.product_id)
         if prod_after and prod_after.quantity < 5:
             alert_text += f"\n\n⚠️ *Kritik qoldiq*\nOmborda {prod_after.name}: {prod_after.quantity} dona!"
+    
+    # Статус печати для админа
+    if print_sent:
+        alert_text += "\n\n🖨️ _Chek printerga yuborildi._"
+    else:
+        alert_text += "\n\n⚠️ _Printer ulanmagan. Chekni qo'lda chop etish mumkin._"
             
     try:
+        from app.telegram.keyboards.admin import undo_and_print_kb, print_retry_kb
         admin_ids = [int(x.strip()) for x in settings.ADMIN_IDS.split(",") if x.strip().isdigit()]
         for admin_id in admin_ids:
             try:
-                await call.bot.send_message(admin_id, alert_text, parse_mode="Markdown", reply_markup=undo_tx_kb(transactions[0].id))
+                # Если принтер был подключён — кнопка отмены + печати
+                # Если нет — кнопка отмены + кнопка повторной печати
+                kb = undo_and_print_kb(transactions[0].id, order_group_id)
+                await call.bot.send_message(admin_id, alert_text, parse_mode="Markdown", reply_markup=kb)
             except Exception:
                 pass
     except Exception:

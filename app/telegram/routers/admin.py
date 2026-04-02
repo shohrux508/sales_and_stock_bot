@@ -518,6 +518,50 @@ async def cb_undo_tx(call: types.CallbackQuery, container: Container):
         new_text = f"❌ *Tranzaksiya bekor qilindi. Mahsulot omborga qaytarildi.*\n\n~~{original_text}~~"
         await call.message.edit_text(new_text, parse_mode="Markdown")
         await call.answer("Qaytarish rasmiylashtirildi!", show_alert=True)
+
+# --- Print Receipt (Повторная печать чека) ---
+@router.callback_query(F.data.startswith("print_receipt_"))
+async def cb_print_receipt(call: types.CallbackQuery, container: Container):
+    """Обработчик кнопки печати/повторной печати чека."""
+    order_id = call.data.split("print_receipt_")[1]
+    
+    from app.api.printer_manager import PrinterConnectionManager
+    printer_manager: PrinterConnectionManager = container.get("printer_manager")
+    
+    if not printer_manager.has_connected_printer:
+        await call.answer(
+            "⚠️ Printer hozirda ulanmagan! Printerni yoqing va qayta urinib ko'ring.",
+            show_alert=True
+        )
+        return
+    
+    # Попытка повторной печати из очереди
+    success = await printer_manager.retry_print_job(order_id)
+    
+    if success:
+        await call.answer("✅ Chek printerga yuborildi!", show_alert=True)
+        # Обновляем текст сообщения — убираем предупреждение
+        original_text = call.message.text or ""
+        if "Printer ulanmagan" in original_text:
+            new_text = original_text.replace(
+                "⚠️ _Printer ulanmagan. Chekni qo'lda chop etish mumkin._",
+                "🖨️ _Chek printerga yuborildi._"
+            )
+            try:
+                # Сохраняем только кнопку отмены
+                from app.telegram.keyboards.admin import undo_tx_kb
+                # Извлечь tx_id из кнопок (первая кнопка)
+                kb = call.message.reply_markup
+                await call.message.edit_text(new_text, parse_mode="Markdown", reply_markup=kb)
+            except Exception:
+                pass
+    else:
+        await call.answer(
+            "❌ Chekni topib bo'lmadi yoki printerga yuborishda xatolik.",
+            show_alert=True
+        )
+
+
 # --- Excel Export F4 ---
 @router.callback_query(F.data.startswith("export_excel_"))
 async def cb_export_excel(call: types.CallbackQuery, container: Container):

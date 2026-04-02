@@ -82,6 +82,20 @@ def undo_tx_kb(tx_id: int) -> InlineKeyboardMarkup:
     builder.button(text="❌ Bekor qilish", callback_data=f"undo_tx_{tx_id}")
     return builder.as_markup()
 
+def undo_and_print_kb(tx_id: int, order_id: str) -> InlineKeyboardMarkup:
+    """Кнопки отмены транзакции и печати чека (для уведомления админу)."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="❌ Bekor qilish", callback_data=f"undo_tx_{tx_id}")
+    builder.button(text="🖨️ Chekni chop etish", callback_data=f"print_receipt_{order_id}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+def print_retry_kb(order_id: str) -> InlineKeyboardMarkup:
+    """Кнопка повторной печати чека (когда принтер не был подключен)."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🖨️ Chekni chop etish", callback_data=f"print_receipt_{order_id}")
+    return builder.as_markup()
+
 def staff_list_kb(workers) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for w in workers:

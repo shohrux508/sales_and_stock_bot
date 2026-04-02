@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 class App:
     def __init__(self):
         self.container = Container()
+        self.printer_manager = None
 
     def setup_services(self):
         logger.info("Setting up services...")
@@ -23,6 +24,16 @@ class App:
         self.container.register("transaction_service", TransactionService(async_session_maker))
         self.container.register("category_service", CategoryService(async_session_maker))
 
+        # Регистрация менеджера принтеров
+        from app.api.printer_manager import PrinterConnectionManager
+        self.printer_manager = PrinterConnectionManager()
+        self.container.register("printer_manager", self.printer_manager)
+        logger.info("PrinterConnectionManager зарегистрирован в DI-контейнере")
+
+    async def init_printer_redis(self):
+        """Инициализация Redis для дедупликации чеков."""
+        if self.printer_manager and settings.REDIS_URL:
+            await self.printer_manager.init_redis(settings.REDIS_URL)
 
     async def setup_telegram(self):
         if settings.RUN_TELEGRAM:
@@ -46,11 +57,14 @@ class App:
             logger.info("Starting API Server...")
             bot = getattr(self, "bot", None)
             dp = getattr(self, "dp", None)
-            return start_api(self.container, bot, dp)
+            return start_api(self.container, bot, dp, self.printer_manager)
         return None
 
     async def run(self):
         self.setup_services()
+        
+        # Инициализация Redis для принтера
+        await self.init_printer_redis()
         
         tasks = []
         
@@ -67,3 +81,4 @@ class App:
             return
 
         await asyncio.gather(*tasks)
+
