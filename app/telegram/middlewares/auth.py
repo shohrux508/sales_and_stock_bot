@@ -43,12 +43,13 @@ class AuthMiddleware(BaseMiddleware):
                 # Notify admin if someone new registered as PENDING
                 if created and user.role == UserRole.PENDING:
                     from app.telegram.keyboards.admin import approve_user_kb
-                    text = f"👤 *Yangi ruxsat so'rovi!*\nFoydalanuvchi: @{user.username or 'username_yoq'}\nID: {user.tg_id}"
+                    text = f"👤 <b>Yangi ruxsat so'rovi!</b>\nFoydalanuvchi: @{user.username or 'username_yoq'}\nID: {user.tg_id}"
                     for admin_id in admin_ids:
                         try:
-                            await event.bot.send_message(admin_id, text, parse_mode="Markdown", reply_markup=approve_user_kb(user.tg_id))
-                        except Exception:
-                            pass # Ignore if admin didn't start the bot
+                            await event.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=approve_user_kb(user.tg_id))
+                        except Exception as e:
+                            import logging
+                            logging.error(f"Failed to send alert to admin {admin_id}: {e}")
                 
                 # Role barrier
                 if user.role == UserRole.BANNED:
@@ -56,12 +57,13 @@ class AuthMiddleware(BaseMiddleware):
                         await user_service.update_user_role(user.tg_id, UserRole.PENDING)
                         user.role = UserRole.PENDING
                         from app.telegram.keyboards.admin import approve_user_kb
-                        text = f"👤 *Ruxsat uchun qayta so'rov!*\nFoydalanuvchi: @{user.username or 'username_yoq'}\nID: {user.tg_id}"
+                        text = f"👤 <b>Ruxsat uchun qayta so'rov!</b>\nFoydalanuvchi: @{user.username or 'username_yoq'}\nID: {user.tg_id}"
                         for admin_id in admin_ids:
                             try:
-                                await event.bot.send_message(admin_id, text, parse_mode="Markdown", reply_markup=approve_user_kb(user.tg_id))
-                            except Exception:
-                                pass
+                                await event.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=approve_user_kb(user.tg_id))
+                            except Exception as e:
+                                import logging
+                                logging.error(f"Failed to send alert to admin {admin_id}: {e}")
                         await event.answer("⏳ Sizning so'rovingiz qayta ko'rib chiqish uchun yuborildi. Administrator tasdiqlashini kuting.")
                     else:
                         if isinstance(event, Message):
