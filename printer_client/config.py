@@ -8,7 +8,7 @@
 SERVER_WS_URL = "wss://salesmanager.up.railway.app/ws/printer/{token}"
 
 # Секретный токен (должен совпадать с PRINTER_SECRET_TOKEN в .env сервера)
-SECRET_TOKEN = "change-me-to-secure-token"
+SECRET_TOKEN = "xprinter-sale-stock-2026-secret"
 
 # Интервал переподключения при обрыве связи (секунды)
 RECONNECT_DELAY = 5

@@ -2,7 +2,6 @@ import uvicorn
 from fastapi import FastAPI
 from app.config import settings
 from app.container import Container
-from app.api.routers import example
 from app.api.printer_manager import PrinterConnectionManager
 
 from contextlib import asynccontextmanager
@@ -52,8 +51,7 @@ def create_app(container: Container, bot=None, dp=None, printer_manager: Printer
     app.state.printer_manager = printer_manager
     
     # Include routers
-    from app.api.routers import example, stats, printer
-    app.include_router(example.router)
+    from app.api.routers import stats, printer
     app.include_router(stats.router)
     app.include_router(printer.router)
     
