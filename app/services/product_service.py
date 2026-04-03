@@ -41,16 +41,18 @@ class ProductService:
 
     async def update_quantity(self, product_id: int, quantity_delta: int) -> Product | None:
         async with self.session_maker() as session:
-            # We can use update with returning or select then update
-            product = await self.get_product_by_id(product_id)
-            if not product:
-                return None
-            
-            new_qty = product.quantity + quantity_delta
-            stmt = update(Product).where(Product.id == product_id).values(quantity=new_qty).returning(Product)
+            # Atomic update to prevent race conditions
+            stmt = (
+                update(Product)
+                .where(Product.id == product_id)
+                .values(quantity=Product.quantity + quantity_delta)
+                .returning(Product)
+            )
             result = await session.execute(stmt)
-            await session.commit()
-            return result.scalar_one()
+            product = result.scalar_one_or_none()
+            if product:
+                await session.commit()
+            return product
 
     async def update_barcode(self, product_id: int, barcode: str) -> bool:
         async with self.session_maker() as session:

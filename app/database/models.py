@@ -45,12 +45,15 @@ class Category(Base):
         "Product", back_populates="category", cascade="all, delete-orphan"
     )
 
+from decimal import Decimal
+from sqlalchemy import BigInteger, Integer, String, Numeric, ForeignKey, DateTime, Enum as SQLEnum
+
 class Product(Base):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    price: Mapped[float] = mapped_column(Float, default=0.0)
+    price: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0.0)
     quantity: Mapped[int] = mapped_column(Integer, default=0)
     barcode: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
@@ -70,7 +73,7 @@ class Transaction(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
-    total_price: Mapped[float] = mapped_column(Float, nullable=False)
+    total_price: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     type: Mapped[TransactionType] = mapped_column(SQLEnum(TransactionType), default=TransactionType.SALE)

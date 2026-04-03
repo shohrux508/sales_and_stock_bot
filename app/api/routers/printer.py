@@ -17,13 +17,20 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/api/printer/status")
-async def printer_status(request_obj=None):
-    """Проверка статуса подключения принтера (для мониторинга)."""
-    from fastapi import Request
-    # Get printer_manager from app state
-    # This endpoint is intentionally simple and doesn't require auth
-    # as it only returns connection status
-    return {"status": "endpoint_active"}
+async def printer_status(secret_token: str | None = None):
+    """
+    Проверка статуса подключения принтера.
+    Требует secret_token для подробностей.
+    """
+    if secret_token and secret_token == settings.PRINTER_SECRET_TOKEN:
+        # Detailed status for monitoring
+        return {
+            "status": "active",
+            "uptime_check": True,
+            "secret_verified": True
+        }
+    # Minimal response
+    return {"status": "ok"}
 
 
 @router.websocket("/ws/printer/{secret_token}")

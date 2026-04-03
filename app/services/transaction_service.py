@@ -142,49 +142,51 @@ class TransactionService:
 
     async def rollback_transaction(self, transaction_id: int) -> bool:
         async with self.session_maker() as session:
-            stmt = select(Transaction).where(Transaction.id == transaction_id)
-            result = await session.execute(stmt)
-            transaction = result.scalar_one_or_none()
-            
-            if not transaction:
-                return False
+            async with session.begin():
+                # Get transaction with FOR UPDATE to prevent double rollback
+                from sqlalchemy import select
+                stmt = select(Transaction).where(Transaction.id == transaction_id).with_for_update()
+                result = await session.execute(stmt)
+                transaction = result.scalar_one_or_none()
                 
-            # Restore product quantity
-            if transaction.product_id:
-                prod_stmt = select(Product).where(Product.id == transaction.product_id)
-                prod_result = await session.execute(prod_stmt)
-                product = prod_result.scalar_one_or_none()
-                if product:
-                    if transaction.type == TransactionType.RECEIPT:
-                        product.quantity -= transaction.amount
-                    else: # SALE or WRITE_OFF
-                        product.quantity += transaction.amount
+                if not transaction:
+                    return False
                     
-            # Delete transaction
-            await session.delete(transaction)
-            await session.commit()
-            return True
+                # Restore product quantity atomically
+                if transaction.product_id:
+                    from sqlalchemy import update
+                    if transaction.type == TransactionType.RECEIPT:
+                        # For a receipt, rollback means subtracting
+                        delta = -transaction.amount
+                    else:
+                        # For sale or write_off, rollback means adding back
+                        delta = transaction.amount
+                        
+                    prod_stmt = (
+                        update(Product)
+                        .where(Product.id == transaction.product_id)
+                        .values(quantity=Product.quantity + delta)
+                    )
+                    await session.execute(prod_stmt)
+                        
+                # Delete transaction
+                await session.delete(transaction)
+                return True
+
+    def _get_start_of_day_utc(self) -> datetime:
+        """Returns UTC timestamp for the start of the day in Uzbekistan (UTC+5)."""
+        from datetime import timedelta
+        # Current time in UZT
+        uzt_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5)))
+        # Start of today in UZT
+        uzt_start = uzt_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Back to UTC for DB filtering
+        return uzt_start.astimezone(timezone.utc)
 
     async def get_worker_sales_today(self, user_id: int) -> Sequence[Transaction]:
-        """Gets all sales for a specific worker for the current day based on local system time."""
+        """Gets all sales for a specific worker for the current day based on UZT (+5) time."""
         async with self.session_maker() as session:
-            # For better accuracy, we can use a simpler approach: 
-            # transactions where timestamp >= UTC start of day
-            # But "today" for a person in UZT (+5) starts at UTC 19:00 (yesterday).
-            # Let's use a naive start of day in UTC for now, but better way is:
-            now_utc = datetime.now(timezone.utc)
-            # Assuming Uzbekistan (+5) for many users of this bot (based on language)
-            # We can calculate the start of the day in current system local time or +5.
-            # Local time in this project seems to be +05:00 based on the prompt.
-            today_start_local = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            # How it's stored? datetime.now(timezone.utc).replace(tzinfo=None)
-            # If we want "today" in local time, we need to find those UTC timestamps.
-            # For +5, local 00:00:00 = UTC 19:00:00 yesterday.
-            
-            # Simple fix for now: just use the last 24 hours if "today" is tricky, 
-            # but usually start of day in naive UTC is a good enough baseline for small shops.
-            # HOWEVER, let's just use naive comparison to CURRENT day to make it "worker-friendly"
-            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start = self._get_start_of_day_utc()
             
             from sqlalchemy.orm import selectinload
             stmt = select(Transaction).options(selectinload(Transaction.product)).where(
@@ -200,11 +202,13 @@ class TransactionService:
         """Returns list of (tg_id, username, total_revenue, total_items) ranked by revenue."""
         async with self.session_maker() as session:
             from datetime import timedelta
-            now = datetime.now(timezone.utc)
             if period == "today":
-                start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_date = self._get_start_of_day_utc()
             else:
-                start_date = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
+                from datetime import timedelta
+                # Last 7 days in UZT
+                uzt_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5)))
+                start_date = (uzt_now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
 
             from sqlalchemy import func
             from app.database.models import User
@@ -229,11 +233,13 @@ class TransactionService:
             now = datetime.now(timezone.utc)
             
             if period == "today":
-                start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_date = self._get_start_of_day_utc()
             elif period == "week":
-                start_date = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
+                from datetime import timedelta
+                uzt_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5)))
+                start_date = (uzt_now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
             else:
-                start_date = now.replace(hour=0, minute=0, second=0, microsecond=0) # fallback
+                start_date = self._get_start_of_day_utc() # fallback
                 
             from sqlalchemy.orm import selectinload
             

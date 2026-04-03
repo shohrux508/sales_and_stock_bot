@@ -25,8 +25,7 @@ class PrinterConnectionManager:
         self.active_connections: dict[str, WebSocket] = {}
         self._redis = None
         self._redis_available = False
-        # Очередь непечатанных чеков (для кнопки "Печать" в Telegram)
-        self.pending_jobs: list[dict] = []
+        self._pending_key = "printer:pending_jobs"
         self._max_pending = 100
 
     async def init_redis(self, redis_url: str) -> None:
@@ -59,6 +58,17 @@ class PrinterConnectionManager:
     def has_connected_printer(self) -> bool:
         """Есть ли хотя бы один подключенный принтер."""
         return len(self.active_connections) > 0
+
+    async def get_all_pending_jobs(self) -> list[dict]:
+        """Получает все чеки в очереди из Redis."""
+        if not self._redis_available:
+            return []
+        try:
+            jobs_raw = await self._redis.lrange(self._pending_key, 0, -1)
+            return [json.loads(j) for j in jobs_raw]
+        except Exception as e:
+            logger.error(f"Redis error getting pending jobs: {e}")
+            return []
 
     async def is_duplicate(self, order_id: str) -> bool:
         """Проверяет, был ли уже отправлен чек с таким order_id (через Redis)."""
@@ -113,35 +123,49 @@ class PrinterConnectionManager:
 
         # Нет подключенных принтеров — добавляем в очередь
         logger.warning(f"Нет подключенных принтеров. Чек {order_id} добавлен в очередь.")
-        self._add_to_pending(order_data)
+        await self._add_to_pending(order_data)
         return False
 
-    def _add_to_pending(self, order_data: dict) -> None:
-        """Добавляет чек в очередь непечатанных."""
-        if len(self.pending_jobs) >= self._max_pending:
-            self.pending_jobs.pop(0)  # FIFO — убираем самый старый
-        self.pending_jobs.append(order_data)
+    async def _add_to_pending(self, order_data: dict) -> None:
+        """Добавляет чек в очередь непечатанных в Redis."""
+        if not self._redis_available:
+            return
+        try:
+            # Add to list and trim to max size
+            await self._redis.rpush(self._pending_key, json.dumps(order_data))
+            await self._redis.ltrim(self._pending_key, -self._max_pending, -1)
+            # Set TTL for the whole queue just in case
+            await self._redis.expire(self._pending_key, 604800) # 1 week
+        except Exception as e:
+            logger.error(f"Redis error adding to pending: {e}")
 
-    def get_pending_job(self, order_id: str) -> Optional[dict]:
+    async def get_pending_job(self, order_id: str) -> Optional[dict]:
         """Получает конкретный чек из очереди по order_id."""
-        for job in self.pending_jobs:
+        jobs = await self.get_all_pending_jobs()
+        for job in jobs:
             if job.get("order_id") == order_id:
                 return job
         return None
 
-    def remove_pending_job(self, order_id: str) -> bool:
-        """Удаляет чек из очереди после успешной печати."""
-        for i, job in enumerate(self.pending_jobs):
-            if job.get("order_id") == order_id:
-                self.pending_jobs.pop(i)
-                return True
+    async def remove_pending_job(self, order_id: str) -> bool:
+        """Удаляет чек из очереди в Redis."""
+        if not self._redis_available:
+            return False
+        try:
+            jobs = await self.get_all_pending_jobs()
+            for job in jobs:
+                if job.get("order_id") == order_id:
+                    await self._redis.lrem(self._pending_key, 1, json.dumps(job))
+                    return True
+        except Exception as e:
+            logger.error(f"Redis error removing job: {e}")
         return False
 
     async def retry_print_job(self, order_id: str) -> bool:
         """
         Повторная попытка печати чека из очереди (вызов по кнопке из Telegram).
         """
-        job = self.get_pending_job(order_id)
+        job = await self.get_pending_job(order_id)
         if not job:
             logger.warning(f"Чек {order_id} не найден в очереди")
             return False
@@ -155,7 +179,7 @@ class PrinterConnectionManager:
             try:
                 await ws.send_json(job)
                 await self._mark_as_printed(order_id)
-                self.remove_pending_job(order_id)
+                await self.remove_pending_job(order_id)
                 logger.info(f"✅ Повторная печать чека {order_id} — успешно")
                 return True
             except Exception as e:

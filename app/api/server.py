@@ -5,44 +5,66 @@ from app.container import Container
 from app.api.routers import example
 from app.api.printer_manager import PrinterConnectionManager
 
+from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    bot = app.state.bot
+    dp = app.state.dp
+    if bot and dp and settings.WEBHOOK_URL:
+        import logging
+        log = logging.getLogger("webhook")
+        webhook_url = f"{settings.WEBHOOK_URL.rstrip('/')}{settings.WEBHOOK_PATH}"
+        log.info(f"Setting webhook to {webhook_url}")
+        await bot.set_webhook(webhook_url, drop_pending_updates=True)
+    
+    yield
+    
+    # Shutdown logic
+    if bot:
+        import logging
+        log = logging.getLogger("webhook")
+        log.info("Deleting webhook and closing bot session")
+        await bot.delete_webhook()
+        await bot.session.close()
+
 def create_app(container: Container, bot=None, dp=None, printer_manager: PrinterConnectionManager = None) -> FastAPI:
-    app = FastAPI()
+    app = FastAPI(lifespan=lifespan)
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Store state for lifespan and routers
     app.state.container = container
     app.state.bot = bot
     app.state.dp = dp
     
-    # Инициализация менеджера принтеров
     if printer_manager is None:
         printer_manager = PrinterConnectionManager()
     app.state.printer_manager = printer_manager
     
+    # Include routers
     from app.api.routers import example, stats, printer
     app.include_router(example.router)
     app.include_router(stats.router)
     app.include_router(printer.router)
     
+    # Webhook endpoint for Aiogram
     if bot and dp and settings.WEBHOOK_URL:
         from aiogram import types
-        import logging
-        log = logging.getLogger("webhook")
-        
         @app.post(settings.WEBHOOK_PATH)
         async def bot_webhook(update: dict):
             telegram_update = types.Update(**update)
             await dp.feed_update(bot=bot, update=telegram_update)
             return {"status": "ok"}
-            
-        @app.on_event("startup")
-        async def on_startup():
-            webhook_url = f"{settings.WEBHOOK_URL.rstrip('/')}{settings.WEBHOOK_PATH}"
-            log.info(f"Setting webhook to {webhook_url}")
-            await bot.set_webhook(webhook_url, drop_pending_updates=True)
-            
-        @app.on_event("shutdown")
-        async def on_shutdown():
-            log.info("Deleting webhook and closing bot session")
-            await bot.delete_webhook()
-            await bot.session.close()
 
     return app
 
