@@ -39,13 +39,13 @@ async def show_stock(message: types.Message, container: Container):
         await message.answer("Ombor bo'sh.", reply_markup=products_list_kb(products))
         return
         
-    await message.answer("📦 Ombordagi mahsulotlar ro'yxati:", reply_markup=products_list_kb(products))
+    await message.answer("📦 OMBORDAGI MAHSULOTLAR RO'YXATI:", reply_markup=products_list_kb(products))
 
 @router.callback_query(F.data == "back_to_stock")
 async def cb_back_to_stock(call: types.CallbackQuery, container: Container):
     product_service: ProductService = container.get("product_service")
     products = await product_service.get_all_products()
-    await call.message.edit_text("📦 Ombordagi mahsulotlar ro'yxati:", reply_markup=products_list_kb(products))
+    await call.message.edit_text("📦 OMBORDAGI MAHSULOTLAR RO'YXATI:", reply_markup=products_list_kb(products))
 
 @router.message(F.text == "Bekor qilish")
 async def cancel_handler(message: types.Message, state: FSMContext):
@@ -79,7 +79,7 @@ async def show_categories(message: types.Message, container: Container):
 async def cb_add_category(call: types.CallbackQuery, state: FSMContext):
     from app.telegram.states.admin import AddCategoryState
     await state.set_state(AddCategoryState.name)
-    await call.message.edit_text("Yangi kategoriya nomini kiriting:", reply_markup=cancel_admin_inline_kb())
+    await call.message.edit_text("YANGI KATEGORIYA NOMINI KIRITING:", reply_markup=cancel_admin_inline_kb())
 
 @router.message(AddCategoryState.name)
 async def process_add_category_name(message: types.Message, state: FSMContext, container: Container):

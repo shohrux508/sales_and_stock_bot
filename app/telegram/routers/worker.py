@@ -70,7 +70,7 @@ async def process_scanned_barcode(message: types.Message, state: FSMContext, con
         await message.answer(f"Mahsulot <b>{product.name}</b> topildi, ammo u omborda qolmagan (0 dona).", parse_mode="HTML")
         return
         
-    await state.update_data(product_id=product.id, max_qty=product.quantity, product_name=product.name, price=product.price)
+    await state.update_data(product_id=product.id, max_qty=product.quantity, product_name=product.name, price=float(product.price))
     # Отправляем inline-кнопку отмены вместо ReplyKeyboard
     await message.answer(
         f"🔍 Mahsulot topildi: <b>{product.name}</b>\nOmborda: <b>{product.quantity}</b> dona.\n\nSotish miqdorini kiriting:",
@@ -129,7 +129,7 @@ async def process_sell_product(call: types.CallbackQuery, state: FSMContext, con
         await call.message.edit_reply_markup(reply_markup=sell_product_list_kb(products))
         return
         
-    await state.update_data(product_id=product_id, max_qty=product.quantity, product_name=product.name, price=product.price)
+    await state.update_data(product_id=product_id, max_qty=product.quantity, product_name=product.name, price=float(product.price))
     # Редактируем текущее сообщение + inline-отмена (нижнее меню остается!)
     await call.message.edit_text(
         f"📦 Tanlangan mahsulot: <b>{product.name}</b>\nOmborda: <b>{product.quantity}</b> dona.\n\nSotish miqdorini kiriting:",
@@ -249,11 +249,11 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
             {
                 "name": tx.product.name,
                 "quantity": tx.amount,
-                "price": tx.product.price,
-                "sum": tx.total_price
+                "price": float(tx.product.price),
+                "sum": float(tx.total_price)
             } for tx in transactions
         ],
-        "total_amount": total_rub,
+        "total_amount": float(total_rub),
         "currency": "UZS"
     }
     
