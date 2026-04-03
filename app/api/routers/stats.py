@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, HTTPException, status
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Query
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import secrets
@@ -11,8 +11,8 @@ security = HTTPBasic(auto_error=False)
 
 def verify_credentials(
     credentials: HTTPBasicCredentials | None = Depends(security),
-    u: str | None = None,
-    p: str | None = None
+    u: str | None = Query(None),
+    p: str | None = Query(None)
 ):
     # Check query params first (for Telegram WebApp convenience)
     if u == "admin" and p == settings.DASHBOARD_PASSWORD:

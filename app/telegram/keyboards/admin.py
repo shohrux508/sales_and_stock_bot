@@ -8,7 +8,7 @@ def main_admin_kb() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="📦 Ombor"), KeyboardButton(text="🗂 Kategoriyalar")],
         [KeyboardButton(text="📥 Qabul qilish"), KeyboardButton(text="🗑 Hisobdan chiqarish")],
         [KeyboardButton(text="👥 Xodimlar"), KeyboardButton(text="📊 Statistika")],
-        [KeyboardButton(text="🌐 Web Dashboard", web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/"))]
+        [KeyboardButton(text="🌐 Web Dashboard", web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/?u=admin&p={settings.DASHBOARD_PASSWORD}"))]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
