@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 📦 Sales & Stock Bot
 
@@ -972,4 +972,3 @@ python -m alembic upgrade head
 ![Telegram](https://img.shields.io/badge/Powered_by-Telegram_Bot_API-26A5E4?style=flat&logo=telegram&logoColor=white)
 
 </div>
-]]>
