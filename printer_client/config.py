@@ -5,7 +5,7 @@
 # URL WebSocket-сервера (заменить на ваш домен)
 # Для Railway/облака: wss://your-domain.com/ws/printer/{token}
 # Для тестирования локально: ws://localhost:8000/ws/printer/{token}
-SERVER_WS_URL = "wss://shohruxyigitaliev.uz/ws/printer/{token}"
+SERVER_WS_URL = "wss://salesmanager.up.railway.app/ws/printer/{token}"
 
 # Секретный токен (должен совпадать с PRINTER_SECRET_TOKEN в .env сервера)
 SECRET_TOKEN = "change-me-to-secure-token"
@@ -18,12 +18,12 @@ RECONNECT_DELAY = 5
 # ============================================
 # Определить через Device Manager или Zadig (Windows)
 # Стандартные значения для Xprinter XP-58IIH / XP-365B:
-PRINTER_VENDOR_ID = 0x0416
-PRINTER_PRODUCT_ID = 0x5011
+PRINTER_VENDOR_ID = 0x0483
+PRINTER_PRODUCT_ID = 0x070B
 
 # Альтернатива: использовать имя принтера Windows (fallback)
 # Если USB не работает, можно использовать имя принтера из "Устройства и принтеры"
-PRINTER_NAME_WIN = "XPrinter"
+PRINTER_NAME_WIN = "POSPrinter POS58"
 
 # ============================================
 # Настройки чека
@@ -37,4 +37,4 @@ RECEIPT_WIDTH = 32
 # Режим принтера: "usb" или "windows"
 # "usb" — python-escpos через pyusb (требует Zadig)
 # "windows" — через win32print (стандартный драйвер Windows)
-PRINTER_MODE = "usb"
+PRINTER_MODE = "windows"

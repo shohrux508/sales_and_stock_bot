@@ -12,7 +12,8 @@ from app.telegram.states.admin import AddProductState, AddCategoryState, WaitAdm
 from app.telegram.keyboards.admin import (
     main_admin_kb, 
     products_list_kb, 
-    cancel_kb, 
+    cancel_kb,
+    cancel_admin_inline_kb,
     product_edit_kb, 
     categories_list_kb, 
     approve_user_kb,
@@ -51,6 +52,16 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("Amal bekor qilindi.", reply_markup=main_admin_kb())
 
+@router.callback_query(F.data == "admin_cancel")
+async def admin_cancel_cb(call: types.CallbackQuery, state: FSMContext):
+    """Inline-отмена для админа — редактирует сообщение, не трогает нижнее меню."""
+    await state.clear()
+    try:
+        await call.message.edit_text("❌ Amal bekor qilindi.")
+    except Exception:
+        await call.message.delete()
+        await call.message.answer("❌ Amal bekor qilindi.", reply_markup=main_admin_kb())
+
 # --- Category Management ---
 @router.message(F.text == "🗂 Kategoriyalar")
 async def show_categories(message: types.Message, container: Container):
@@ -68,8 +79,7 @@ async def show_categories(message: types.Message, container: Container):
 async def cb_add_category(call: types.CallbackQuery, state: FSMContext):
     from app.telegram.states.admin import AddCategoryState
     await state.set_state(AddCategoryState.name)
-    await call.message.edit_text("Yangi kategoriya nomini kiriting:", reply_markup=None)
-    await call.bot.send_message(call.message.chat.id, "Yoki qaytish uchun 'Bekor qilish' tugmasini bosing.", reply_markup=cancel_kb())
+    await call.message.edit_text("Yangi kategoriya nomini kiriting:", reply_markup=cancel_admin_inline_kb())
 
 @router.message(AddCategoryState.name)
 async def process_add_category_name(message: types.Message, state: FSMContext, container: Container):
@@ -109,8 +119,7 @@ async def cb_select_category_for_product(call: types.CallbackQuery, state: FSMCo
     cat_id = int(call.data.split("_")[2])
     await state.update_data(category_id=cat_id)
     await state.set_state(AddProductState.name)
-    await call.message.edit_text("Ajoyib. Yangi mahsulot nomini kiriting:", reply_markup=None)
-    await call.bot.send_message(call.message.chat.id, "Yoki 'Bekor qilish' ni yuboring", reply_markup=cancel_kb())
+    await call.message.edit_text("Ajoyib. Yangi mahsulot nomini kiriting:", reply_markup=cancel_admin_inline_kb())
 
 @router.message(AddProductState.name)
 async def process_product_name(message: types.Message, state: FSMContext):
@@ -159,8 +168,8 @@ async def cb_edit_product(call: types.CallbackQuery, container: Container):
     
     product = await product_service.get_product_by_id(product_id)
     if product:
-        text = f"📦 Mahsulot: *{product.name}*\nNarx: {product.price}\nQoldiq: {product.quantity}"
-        await call.message.edit_text(text, parse_mode="Markdown", reply_markup=product_edit_kb(product_id))
+        text = f"📦 <b>Mahsulot:</b> {product.name}\nNarx: {product.price:,} so'm\nQoldiq: <b>{product.quantity}</b> dona"
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=product_edit_kb(product_id))
 
 @router.callback_query(F.data.startswith("prod_inc_"))
 async def cb_inc_product(call: types.CallbackQuery, container: Container):
@@ -169,8 +178,8 @@ async def cb_inc_product(call: types.CallbackQuery, container: Container):
     
     product = await product_service.update_quantity(product_id, 1)
     if product:
-        text = f"📦 Mahsulot: *{product.name}*\nNarx: {product.price}\nQoldiq: {product.quantity}"
-        await call.message.edit_text(text, parse_mode="Markdown", reply_markup=product_edit_kb(product_id))
+        text = f"📦 <b>Mahsulot:</b> {product.name}\nNarx: {product.price:,} so'm\nQoldiq: <b>{product.quantity}</b> dona"
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=product_edit_kb(product_id))
     else:
         await call.answer("Mahsulot topilmadi", show_alert=True)
 
@@ -183,8 +192,8 @@ async def cb_dec_product(call: types.CallbackQuery, container: Container):
     product = await product_service.get_product_by_id(product_id)
     if product and product.quantity > 0:
         new_product = await product_service.update_quantity(product_id, -1)
-        text = f"📦 Mahsulot: *{new_product.name}*\nNarx: {new_product.price}\nQoldiq: {new_product.quantity}"
-        await call.message.edit_text(text, parse_mode="Markdown", reply_markup=product_edit_kb(product_id))
+        text = f"📦 <b>Mahsulot:</b> {new_product.name}\nNarx: {new_product.price:,} so'm\nQoldiq: <b>{new_product.quantity}</b> dona"
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=product_edit_kb(product_id))
     else:
         await call.answer("Kamaytirib bo'lmaydi (qoldiq 0 yoki mahsulot topilmadi)", show_alert=True)
 
@@ -195,7 +204,7 @@ async def cb_delete_product_conf(call: types.CallbackQuery, container: Container
     product_service: ProductService = container.get("product_service")
     product = await product_service.get_product_by_id(product_id)
     if product:
-        await call.message.edit_text(f"⚠️ *{product.name}* mahsulotini o'chirishga ishonchingiz komilmi?\nBu amalni ortga qaytarib bo'lmaydi.", parse_mode="Markdown", reply_markup=product_delete_confirm_kb(product_id))
+        await call.message.edit_text(f"⚠️ <b>{product.name}</b> mahsulotini o'chirishga ishonchingiz komilmi?\nBu amalni ortga qaytarib bo'lmaydi.", parse_mode="HTML", reply_markup=product_delete_confirm_kb(product_id))
 
 @router.callback_query(F.data.startswith("prod_del_yes_"))
 async def cb_delete_product_yes(call: types.CallbackQuery, container: Container):
@@ -284,13 +293,8 @@ async def cb_staff_profile(call: types.CallbackQuery, container: Container):
         
     from app.telegram.keyboards.admin import staff_profile_kb
     
-    # Escape simple characters for Markdown
-    def escape_md(text):
-        if not text: return "---"
-        return str(text).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
-        
-    username = escape_md(user.username)
-    full_name = escape_md(user.full_name)
+    from app.telegram.keyboards.worker import kpi_progress_bar
+    import html
     
     # Calculate current progress for KPI
     transaction_service: TransactionService = container.get("transaction_service")
@@ -300,29 +304,36 @@ async def cb_staff_profile(call: types.CallbackQuery, container: Container):
     status = "✅ Faol" if user.is_active else "⛔ Bloklangan"
     if user.role == UserRole.PENDING:
         status = "⏳ Tasdiqlash kutilmoqda"
+        
+    kpi_bar = kpi_progress_bar(revenue_today, user.kpi) if user.kpi > 0 else "🎯 KPI belgilanmagan"
     
-    text = f"👤 *Profil:* {full_name}\n\n" \
-           f"• ID: `{user.tg_id}`\n" \
-           f"• Username: @{username}\n" \
-           f"• Telefon: {escape_md(user.phone)}\n" \
-           f"• Rol: {user.role.value}\n" \
-           f"• Holat: {status}\n" \
-           f"• Ro'yxatdan o'tgan: {user.joined_at.strftime('%Y-%m-%d') if user.joined_at else '---'}\n\n" \
-           f"🎯 *Bugungi KPI:*\n" \
-           f"• Maqsad: {user.kpi} so'm.\n" \
-           f"• Daromad: {round(revenue_today, 2)} so'm.\n" \
-           f"• Jarayon: {min(100, int(revenue_today/user.kpi*100)) if user.kpi > 0 else 0}%\n\n" \
-           f"Amalni tanlang:"
+    username = html.escape(user.username) if user.username else "---"
+    full_name = html.escape(user.full_name) if user.full_name else "---"
+    phone = html.escape(user.phone) if user.phone else "---"
     
-    await call.message.edit_text(text, parse_mode="Markdown", reply_markup=staff_profile_kb(tg_id, user.role))
+    text = (
+        f"👤 <b>Profil:</b> {full_name}\n\n"
+        f"<blockquote>• ID: <code>{user.tg_id}</code>\n"
+        f"• Username: @{username}\n"
+        f"• Telefon: {phone}\n"
+        f"• Rol: {user.role.value}\n"
+        f"• Holat: {status}\n"
+        f"• Ro'yxatdan o'tgan: {user.joined_at.strftime('%Y-%m-%d') if user.joined_at else '---'}</blockquote>\n\n"
+        f"🎯 <b>Bugungi KPI:</b>\n"
+        f"• Maqsad: {user.kpi:,} so'm\n"
+        f"• Daromad: {round(revenue_today, 2):,} so'm\n\n"
+        f"{kpi_bar}\n\n"
+        f"Amalni tanlang:"
+    )
+    
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=staff_profile_kb(tg_id, user.role))
 
 @router.callback_query(F.data.startswith("staff_edit_name_"))
 async def cb_staff_edit_name(call: types.CallbackQuery, state: FSMContext):
     tg_id = int(call.data.split("_")[3])
     await state.update_data(target_tg_id=tg_id)
     await state.set_state(EditStaffProfileState.full_name)
-    await call.message.edit_text("Xodim F.I.Sh ni kiriting:", reply_markup=None)
-    await call.bot.send_message(call.message.chat.id, "Yoki 'Bekor qilish' ni bosing", reply_markup=cancel_kb())
+    await call.message.edit_text("Xodim F.I.Sh ni kiriting:", reply_markup=cancel_admin_inline_kb())
 
 @router.message(EditStaffProfileState.full_name)
 async def process_edit_staff_name(message: types.Message, state: FSMContext, container: Container):
@@ -338,8 +349,7 @@ async def cb_staff_edit_phone(call: types.CallbackQuery, state: FSMContext):
     tg_id = int(call.data.split("_")[3])
     await state.update_data(target_tg_id=tg_id)
     await state.set_state(EditStaffProfileState.phone)
-    await call.message.edit_text("Xodim telefon raqamini kiriting:", reply_markup=None)
-    await call.bot.send_message(call.message.chat.id, "Yoki 'Bekor qilish' ni bosing", reply_markup=cancel_kb())
+    await call.message.edit_text("Xodim telefon raqamini kiriting:", reply_markup=cancel_admin_inline_kb())
 
 @router.message(EditStaffProfileState.phone)
 async def process_edit_staff_phone(message: types.Message, state: FSMContext, container: Container):
@@ -357,8 +367,7 @@ async def cb_staff_edit_kpi(call: types.CallbackQuery, state: FSMContext):
     tg_id = int(call.data.split("_")[3])
     await state.update_data(target_tg_id=tg_id)
     await state.set_state(EditStaffKPIState.kpi)
-    await call.message.edit_text("Yangi KPI kiriting (so'm yoki donada maqsadli qiymat):", reply_markup=None)
-    await call.bot.send_message(call.message.chat.id, "Yoki 'Bekor qilish' ni bosing", reply_markup=cancel_kb())
+    await call.message.edit_text("Yangi KPI kiriting (so'm yoki donada maqsadli qiymat):", reply_markup=cancel_admin_inline_kb())
 
 @router.message(EditStaffKPIState.kpi)
 async def process_edit_staff_kpi(message: types.Message, state: FSMContext, container: Container):
@@ -488,22 +497,26 @@ async def process_stats(call: types.CallbackQuery, container: Container):
     
     period_str = "bugun" if period == "today" else "so'nggi 7 kun"
     
-    text = f"📊 *{period_str} statistikasi:*\n\n"
-    text += f"Jami cheklar: {total_sales}\n"
-    text += f"Sotilgan mahsulotlar: {total_items} dona.\n"
-    text += f"Umumiy daromad: *{total_revenue} so'm.*\n\n"
+    text = f"📊 <b>{period_str.capitalize()} statistikasi:</b>\n\n"
+    text += f"Jami cheklar: <b>{total_sales}</b>\n"
+    text += f"Sotilgan mahsulotlar: <b>{total_items}</b> dona.\n"
+    text += f"Umumiy daromad: <b>{total_revenue:,} so'm.</b>\n\n"
     
-    text += "🏆 *Eng ko'p sotilgan Top-3 mahsulot:*\n"
+    text += "🏆 <b>Eng ko'p sotilgan Top-3 mahsulot:</b>\n"
+    text += "<blockquote>"
     for rank, (p_name, stats) in enumerate(top_products, 1):
-        text += f"{rank}. {p_name} — {stats['count']} dona. ({stats['revenue']} so'm)\n"
+        text += f"{rank}. <b>{p_name}</b> — {stats['count']} dona. (<i>{stats['revenue']:,} so'm</i>)\n"
+    text += "</blockquote>"
         
     if rankings:
-        text += "\n👥 *Xodimlar reytingi:*\n"
+        text += "\n👥 <b>Xodimlar reytingi:</b>\n"
+        text += "<blockquote>"
         for i, rank in enumerate(rankings, 1):
             name = rank.username or f"ID {rank.tg_id}"
-            text += f"{i}. {name} — {rank.revenue} so'm. ({rank.items} dona.)\n"
+            text += f"{i}. <b>@{name}</b> — {rank.revenue:,} so'm. (<i>{rank.items} dona.</i>)\n"
+        text += "</blockquote>"
             
-    await call.message.edit_text(text, parse_mode="Markdown")
+    await call.message.edit_text(text, parse_mode="HTML")
 
 # --- Rollbacks F3 ---
 @router.callback_query(F.data.startswith("undo_tx_"))
@@ -514,9 +527,10 @@ async def cb_undo_tx(call: types.CallbackQuery, container: Container):
     success = await transaction_service.rollback_transaction(tx_id)
     if success:
         # Edit the original alert message
-        original_text = call.message.text or call.message.caption or "Tafsilotlar noma'lum"
-        new_text = f"❌ *Tranzaksiya bekor qilindi. Mahsulot omborga qaytarildi.*\n\n~~{original_text}~~"
-        await call.message.edit_text(new_text, parse_mode="Markdown")
+        import html
+        original_text = html.escape(call.message.text or call.message.caption or "Tafsilotlar noma'lum")
+        new_text = f"❌ <b>Tranzaksiya bekor qilindi. Mahsulot omborga qaytarildi.</b>\n\n<s>{original_text}</s>"
+        await call.message.edit_text(new_text, parse_mode="HTML")
         await call.answer("Qaytarish rasmiylashtirildi!", show_alert=True)
 
 # --- Print Receipt (Повторная печать чека) ---
@@ -679,8 +693,7 @@ async def receipt_select_product(call: types.CallbackQuery, state: FSMContext, c
     product_service: ProductService = container.get("product_service")
     product = await product_service.get_product_by_id(product_id)
     await state.update_data(product_id=product_id, product_name=product.name)
-    await call.message.delete()
-    await call.message.answer(f"📦 Qabul qilish: *{product.name}*\nJoriy qoldiq: {product.quantity} dona.\n\nKirim miqdorini kiriting:", parse_mode="Markdown", reply_markup=cancel_kb())
+    await call.message.edit_text(f"📦 Qabul qilish: <b>{product.name}</b>\nJoriy qoldiq: {product.quantity} dona.\n\nKirim miqdorini kiriting:", parse_mode="HTML", reply_markup=cancel_admin_inline_kb())
     await state.set_state(ReceiptState.quantity)
 
 @router.message(ReceiptState.quantity)
@@ -694,7 +707,7 @@ async def process_receipt_quantity(message: types.Message, state: FSMContext, co
     data = await state.get_data()
     transaction_service: TransactionService = container.get("transaction_service")
     await transaction_service.create_receipt(user_id=db_user.id, product_id=data['product_id'], amount=qty)
-    await message.answer(f"✅ *{data['product_name']}* mahsulotidan {qty} dona muvaffaqiyatli qabul qilindi.", parse_mode="Markdown", reply_markup=main_admin_kb())
+    await message.answer(f"✅ <b>{data['product_name']}</b> mahsulotidan {qty} dona muvaffaqiyatli qabul qilindi.", parse_mode="HTML", reply_markup=main_admin_kb())
     await state.clear()
 
 # Write-off Flow
@@ -727,8 +740,7 @@ async def write_off_select_product(call: types.CallbackQuery, state: FSMContext,
     product_service: ProductService = container.get("product_service")
     product = await product_service.get_product_by_id(product_id)
     await state.update_data(product_id=product_id, product_name=product.name, max_qty=product.quantity)
-    await call.message.delete()
-    await call.message.answer(f"🗑 Hisobdan chiqarish: *{product.name}*\nMavjud: {product.quantity} dona.\n\nHisobdan chiqarish miqdorini kiriting:", parse_mode="Markdown", reply_markup=cancel_kb())
+    await call.message.edit_text(f"🗑 Hisobdan chiqarish: <b>{product.name}</b>\nMavjud: {product.quantity} dona.\n\nHisobdan chiqarish miqdorini kiriting:", parse_mode="HTML", reply_markup=cancel_admin_inline_kb())
     await state.set_state(WriteOffState.quantity)
 
 @router.message(WriteOffState.quantity)
@@ -744,7 +756,7 @@ async def process_write_off_quantity(message: types.Message, state: FSMContext):
         await message.answer(f"Ombordagidan ({data['max_qty']}) ko'prog'ini hisobdan chiqarib bo'lmaydi. Qaytadan kiriting:")
         return
     await state.update_data(quantity=qty)
-    await message.answer( "Hisobdan chiqarish sababini kiriting (masalan, 'yaroqsiz', 'muddati o'tgan'):" , reply_markup=cancel_kb())
+    await message.answer("Hisobdan chiqarish sababini kiriting (masalan, 'yaroqsiz', 'muddati o'tgan'):")
     await state.set_state(WriteOffState.reason)
 
 @router.message(WriteOffState.reason)
@@ -753,7 +765,7 @@ async def process_write_off_reason(message: types.Message, state: FSMContext, co
     data = await state.get_data()
     transaction_service: TransactionService = container.get("transaction_service")
     await transaction_service.create_write_off(user_id=db_user.id, product_id=data['product_id'], amount=data['quantity'], reason=reason)
-    await message.answer(f"✅ *{data['product_name']}* mahsulotidan {data['quantity']} dona muvaffaqiyatli hisobdan chiqarildi, sabab: {reason}", parse_mode="Markdown", reply_markup=main_admin_kb())
+    await message.answer(f"✅ <b>{data['product_name']}</b> mahsulotidan {data['quantity']} dona muvaffaqiyatli hisobdan chiqarildi, sabab: {reason}", parse_mode="HTML", reply_markup=main_admin_kb())
     await state.clear()
 
 # --- Bind Barcode ---
@@ -762,8 +774,7 @@ async def cb_bind_barcode(call: types.CallbackQuery, state: FSMContext):
     product_id = int(call.data.split("_")[2])
     await state.update_data(product_id=product_id)
     await state.set_state(BindBarcodeState.barcode)
-    await call.message.edit_text("Mahsulot shtrix-kodini yuboring (raqamlarni yozing yoki kamera yordamida skanerlang):")
-    await call.message.answer("Yoki amalni bekor qiling:", reply_markup=cancel_kb())
+    await call.message.edit_text("Mahsulot shtrix-kodini yuboring (raqamlarni yozing yoki kamera yordamida skanerlang):", reply_markup=cancel_admin_inline_kb())
 
 @router.message(BindBarcodeState.barcode)
 async def process_bind_barcode(message: types.Message, state: FSMContext, container: Container):
@@ -773,7 +784,7 @@ async def process_bind_barcode(message: types.Message, state: FSMContext, contai
     
     existing = await product_service.get_product_by_barcode(barcode)
     if existing and existing.id != data['product_id']:
-        await message.answer("Bu shtrix-kod boshqa mahsulotga biriktirilgan. Boshqasini sinab ko'ring:", reply_markup=cancel_kb())
+        await message.answer("Bu shtrix-kod boshqa mahsulotga biriktirilgan. Boshqasini sinab ko'ring:")
         return
         
     success = await product_service.update_barcode(data['product_id'], barcode)

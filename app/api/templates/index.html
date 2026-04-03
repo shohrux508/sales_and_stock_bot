@@ -1,213 +1,349 @@
 <!DOCTYPE html>
-<html lang="uz">
+<html lang="uz" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Stock Analytics | Live</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        :root {
-            --bg: #0b0e14;
-            --surface: #151921;
-            --surface-hover: #1c222d;
-            --primary: #6366f1;
-            --accent: #8b5cf6;
+        :root[data-theme="dark"] {
+            --bg: #09090b;
+            --bg-gradient: radial-gradient(circle at top left, #1a1525, #09090b);
+            --surface: rgba(21, 25, 33, 0.5);
+            --surface-hover: rgba(40, 45, 60, 0.6);
+            --primary: #818cf8;
+            --accent: #c084fc;
             --success: #10b981;
             --danger: #ef4444;
             --warning: #f59e0b;
             --text: #f8fafc;
             --text-muted: #94a3b8;
-            --border: rgba(255, 255, 255, 0.05);
-            --nav-bg: rgba(21, 25, 33, 0.85);
+            --border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            --nav-bg: rgba(15, 15, 15, 0.7);
+            --neon-glow: 0 0 15px rgba(129, 140, 248, 0.2);
+        }
+
+        :root[data-theme="light"] {
+            --bg: #f8fafc;
+            --bg-gradient: radial-gradient(circle at top left, #e0e7ff, #f8fafc);
+            --surface: rgba(255, 255, 255, 0.6);
+            --surface-hover: rgba(255, 255, 255, 0.9);
+            --primary: #4f46e5;
+            --accent: #9333ea;
+            --success: #059669;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --border: rgba(0, 0, 0, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+            --nav-bg: rgba(255, 255, 255, 0.7);
+            --neon-glow: 0 0 15px rgba(79, 70, 229, 0.15);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--bg-gradient);
             background-color: var(--bg);
+            background-attachment: fixed;
             color: var(--text);
-            padding: 20px 20px 100px 20px; /* space for bottom nav */
+            padding: 20px 20px 100px 20px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
+            transition: background 0.4s ease, color 0.4s ease;
         }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
         .container {
             width: 100%;
-            max-width: 1000px;
+            max-width: 1050px;
             animation: fadeIn 0.4s ease-out;
         }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); filter: blur(4px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
 
         /* Pages */
         .page { display: none; }
-        .page.active { display: block; animation: fadeIn 0.4s ease-out; }
+        .page.active { display: block; animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
 
         /* Header */
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 24px;
+            margin-bottom: 28px;
             flex-wrap: wrap;
             gap: 16px;
         }
 
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         .brand h1 {
-            font-size: 1.4rem;
+            font-size: 1.6rem;
             font-weight: 800;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.03em;
             background: linear-gradient(135deg, var(--primary), var(--accent));
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
+            text-shadow: var(--neon-glow);
         }
 
         .live-badge {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            background: rgba(16, 185, 129, 0.1);
+            gap: 8px;
+            background: rgba(16, 185, 129, 0.15);
             color: var(--success);
-            padding: 4px 10px;
+            padding: 5px 12px;
             border-radius: 100px;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             font-weight: 700;
             text-transform: uppercase;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+            backdrop-filter: blur(4px);
         }
 
         .live-dot {
-            width: 6px;
-            height: 6px;
+            width: 8px;
+            height: 8px;
             background: var(--success);
             border-radius: 50%;
-            animation: pulse 1.5s infinite;
+            animation: pulseFade 1.5s infinite;
         }
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        @keyframes pulseFade { 0% { opacity: 1; box-shadow: 0 0 0 0 rgba(16,185,129,0.4); } 50% { opacity: 0.4; } 100% { opacity: 1; box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
 
-        /* Filters */
-        select {
+        /* Controls */
+        select, .theme-btn {
             background: var(--surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             color: var(--text);
             border: 1px solid var(--border);
-            padding: 8px 16px;
-            border-radius: 12px;
+            padding: 10px 18px;
+            border-radius: 14px;
             font-size: 0.85rem;
             font-weight: 600;
             outline: none;
             cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: var(--glass-shadow);
         }
+
+        select:hover, .theme-btn:hover {
+            border-color: var(--primary);
+            background: var(--surface-hover);
+        }
+        
+        .theme-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+        }
+        .theme-btn i { width: 18px; height: 18px; }
 
         /* Stats Grid */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 24px;
+            gap: 20px;
+            margin-bottom: 28px;
         }
 
         .stat-card {
             background: var(--surface);
-            padding: 20px;
-            border-radius: 20px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 24px;
+            border-radius: 24px;
             border: 1px solid var(--border);
-            transition: 0.3s;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--glass-shadow);
+        }
+        
+        .stat-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            opacity: 0; transition: opacity 0.3s ease;
         }
 
-        .stat-card h3 { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; font-weight: 700; }
-        .stat-card .value { font-size: 1.5rem; font-weight: 800; }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2), var(--neon-glow);
+        }
+        
+        .stat-card:hover::before { opacity: 1; }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .stat-card h3 { 
+            font-size: 0.75rem; 
+            color: var(--text-muted); 
+            text-transform: uppercase; 
+            font-weight: 700; 
+            letter-spacing: 0.05em;
+        }
+
+        .stat-icon {
+            color: var(--primary);
+            opacity: 0.8;
+        }
+
+        .stat-card .value { 
+            font-size: 1.8rem; 
+            font-weight: 800; 
+            background: linear-gradient(180deg, var(--text), var(--text-muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
         
         .card-box {
             background: var(--surface);
-            padding: 20px;
-            border-radius: 24px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 24px;
+            border-radius: 28px;
             border: 1px solid var(--border);
             margin-bottom: 24px;
             overflow: hidden;
+            box-shadow: var(--glass-shadow);
+            transition: transform 0.3s ease;
         }
 
-        .card-box h2 { font-size: 1rem; color: var(--text-muted); margin-bottom: 16px; font-weight: 600; }
+        .card-box h2 { 
+            font-size: 1.1rem; 
+            color: var(--text); 
+            margin-bottom: 20px; 
+            font-weight: 700; 
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .card-box h2 i { color: var(--primary); }
 
         /* Staff & Inventory List */
-        .list-container { display: flex; flex-direction: column; gap: 10px; }
+        .list-container { display: flex; flex-direction: column; gap: 12px; }
         .list-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
-            background: var(--bg);
-            border-radius: 16px;
+            padding: 14px 20px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 20px;
             border: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+        
+        :root[data-theme="light"] .list-item { background: rgba(255, 255, 255, 0.4); }
+
+        .list-item:hover {
+            transform: scale(1.01);
+            background: var(--surface-hover);
+            border-color: rgba(129, 140, 248, 0.3);
         }
 
-        .item-info { display: flex; flex-direction: column; }
-        .item-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 2px;}
-        .item-meta { font-size: 0.75rem; color: var(--text-muted); }
-        .item-value { font-weight: 800; font-size: 0.95rem; }
+        .item-info { display: flex; flex-direction: column; gap: 4px; }
+        .item-title { font-weight: 700; font-size: 0.95rem; }
+        .item-meta { font-size: 0.75rem; color: var(--text-muted); font-weight: 500;}
+        .item-value { font-weight: 800; font-size: 1rem; }
         .val-success { color: var(--success); }
         
         /* Badges */
         .badge {
-            padding: 4px 10px;
-            border-radius: 8px;
+            padding: 6px 12px;
+            border-radius: 10px;
             font-size: 0.75rem;
             font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: inset 0 0 0 1px currentColor;
         }
-        .bg-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2) }
-        .bg-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid rgba(245,158,11,0.2)}
-        .bg-success { background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.2) }
+        .bg-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none;}
+        .bg-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning); border: none;}
+        .bg-success { background: rgba(16, 185, 129, 0.1); color: var(--success); border: none;}
 
         /* Bottom Navigation */
         .bottom-nav {
             position: fixed;
-            bottom: 20px;
+            bottom: 24px;
             left: 50%;
             transform: translateX(-50%);
             width: calc(100% - 40px);
             max-width: 400px;
             background: var(--nav-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
             border: 1px solid var(--border);
-            border-radius: 24px;
+            border-radius: 100px;
             display: flex;
             justify-content: space-around;
-            padding: 8px 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            padding: 8px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), var(--neon-glow);
             z-index: 1000;
         }
+
+        :root[data-theme="light"] .bottom-nav { box-shadow: 0 10px 30px rgba(0,0,0,0.1), var(--neon-glow); }
 
         .nav-btn {
             background: transparent;
             border: none;
             color: var(--text-muted);
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: inherit;
             font-size: 0.75rem;
-            font-weight: 600;
-            padding: 10px 20px;
-            border-radius: 16px;
+            font-weight: 700;
+            padding: 12px 24px;
+            border-radius: 100px;
             cursor: pointer;
-            transition: 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
-            gap: 4px;
+            gap: 8px;
         }
 
-        .nav-btn svg { width: 22px; height: 22px; stroke-width: 2; stroke: currentColor; fill: none; }
-        .nav-btn.active { background: var(--surface-hover); color: var(--primary); }
+        .nav-btn i { width: 20px; height: 20px; }
+        .nav-btn.active { 
+            background: var(--primary); 
+            color: #fff; 
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
 
         /* Responsive Resizes */
         @media (max-width: 600px) {
-            .stats-grid { grid-template-columns: 1fr; gap: 12px; }
-            .card-box { padding: 16px; }
+            .stats-grid { grid-template-columns: 1fr; gap: 16px; }
+            .card-box { padding: 18px; border-radius: 20px;}
             .bottom-nav { width: calc(100% - 32px); bottom: 16px;}
+            .nav-btn span { display: none; } /* hide text on mobile for nav */
+            .nav-btn { padding: 12px; }
         }
         
         @media (min-width: 850px) {
@@ -226,36 +362,50 @@
                     <div class="live-badge"><div class="live-dot"></div> Live</div>
                     <h1>Asosiy Ko'rsatkichlar</h1>
                 </div>
-                <select id="periodSelect" onchange="fetchStats()">
-                    <option value="today">Bugun</option>
-                    <option value="week" selected>7 kunlik</option>
-                </select>
+                <div class="header-controls">
+                    <button class="theme-btn" onclick="toggleTheme()" title="Mavzuni o'zgartirish">
+                        <i data-lucide="moon" id="themeIcon"></i>
+                    </button>
+                    <select id="periodSelect" onchange="fetchStats()">
+                        <option value="today">Bugun</option>
+                        <option value="week" selected>7 kunlik</option>
+                    </select>
+                </div>
             </header>
 
             <section class="stats-grid">
                 <div class="stat-card">
-                    <h3>Umumiy Tushum</h3>
-                    <div class="value" id="valRevenue">0</div>
+                    <div class="stat-header">
+                        <h3>Umumiy Tushum</h3>
+                        <i data-lucide="wallet" class="stat-icon"></i>
+                    </div>
+                    <div class="value" data-val="0" id="valRevenue">0</div>
                 </div>
                 <div class="stat-card">
-                    <h3>Sotilgan tovarlar</h3>
-                    <div class="value" id="valItems">0</div>
+                    <div class="stat-header">
+                        <h3>Sotilgan tovarlar</h3>
+                        <i data-lucide="shopping-bag" class="stat-icon"></i>
+                    </div>
+                    <div class="value" data-val="0" id="valItems">0</div>
                 </div>
                 <div class="stat-card">
-                    <h3>Cheklar soni</h3>
-                    <div class="value" id="valSales">0</div>
+                    <div class="stat-header">
+                        <h3>Cheklar soni</h3>
+                        <i data-lucide="receipt" class="stat-icon"></i>
+                    </div>
+                    <div class="value" data-val="0" id="valSales">0</div>
                 </div>
             </section>
 
             <div class="desktop-split">
                 <div class="card-box">
-                    <h2>Kategoriya bo'yicha ulush</h2>
+                    <h2><i data-lucide="pie-chart"></i> Kategoriya bo'yicha ulush</h2>
                     <div style="height: 280px; width:100%; position:relative; display:flex; justify-content:center;">
                         <canvas id="productsChart"></canvas>
                     </div>
                 </div>
                 <div class="card-box">
-                    <h2>Xodimlar Reytingi (Top 5)</h2>
+                    <h2><i data-lucide="users"></i> Xodimlar Reytingi (Top 5)</h2>
                     <div id="staffList" class="list-container">
                         <!-- Dynamic content -->
                     </div>
@@ -263,24 +413,31 @@
             </div>
         </div>
 
-        <!-- PAGE 2: INVENTORY (MOCK DEMO) -->
+        <!-- PAGE 2: INVENTORY -->
         <div id="page-inventory" class="page">
             <header>
                 <div class="brand">
-                    <div class="live-badge" style="background:var(--success); color:#fff"><div class="live-dot" style="background:#fff"></div> Jonli Holat</div>
+                    <div class="live-badge" style="background:var(--success); color:#fff; box-shadow: 0 0 10px var(--success)">
+                        <div class="live-dot" style="background:#fff"></div> Jonli Holat
+                    </div>
                     <h1>Ombor Holati</h1>
+                </div>
+                <div class="header-controls">
+                    <button class="theme-btn" onclick="toggleTheme()">
+                        <i data-lucide="moon" class="themeIconClone"></i>
+                    </button>
                 </div>
             </header>
 
-            <div class="card-box" id="lowStockBox" style="display: none;">
-                <h2 style="color: var(--danger)">Zudlik bilan to'ldirish kerak (Tanqis)</h2>
+            <div class="card-box" id="lowStockBox" style="display: none; border-color: rgba(239, 68, 68, 0.3);">
+                <h2 style="color: var(--danger)"><i data-lucide="alert-triangle"></i> Zudlik bilan to'ldirish kerak (Tanqis)</h2>
                 <div class="list-container" id="lowStockList">
                     <!-- Dynamic -->
                 </div>
             </div>
 
             <div class="card-box">
-                <h2>Yetarli zaxirada</h2>
+                <h2><i data-lucide="packages"></i> Yetarli zaxirada</h2>
                 <div class="list-container" id="goodStockList">
                     <!-- Dynamic -->
                 </div>
@@ -292,16 +449,39 @@
     <!-- BOTTOM NAVIGATION TABS -->
     <nav class="bottom-nav">
         <button class="nav-btn active" onclick="switchTab('dashboard', this)">
-            <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-            Asosiy
+            <i data-lucide="layout-dashboard"></i>
+            <span>Asosiy</span>
         </button>
         <button class="nav-btn" onclick="switchTab('inventory', this)">
-            <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-            Ombor
+            <i data-lucide="box"></i>
+            <span>Ombor</span>
         </button>
     </nav>
 
     <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // THEME LOGIC
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const newTheme = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            
+            // Update icons
+            const iconName = newTheme === 'dark' ? 'moon' : 'sun';
+            document.getElementById('themeIcon').setAttribute('data-lucide', iconName);
+            document.querySelector('.themeIconClone').setAttribute('data-lucide', iconName);
+            lucide.createIcons();
+            
+            // Re-render chart text colors
+            if (chartInstance) {
+                chartInstance.options.plugins.legend.labels.color = newTheme === 'dark' ? '#94a3b8' : '#64748b';
+                chartInstance.update();
+            }
+        }
+
         // TAB SWITCHING LOGIC
         function switchTab(tabId, btnContext) {
             document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
@@ -309,6 +489,30 @@
             
             document.getElementById(`page-${tabId}`).classList.add('active');
             btnContext.classList.add('active');
+        }
+
+        // NUMBER ANIMATION LOGIC
+        function animateValue(obj, start, end, duration, formatFn) {
+            let startTimestamp = null;
+            // Store target value to avoid re-animating if not changed
+            if (obj.getAttribute('data-val') == end) return;
+            obj.setAttribute('data-val', end);
+            
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                // Ease out expo
+                const easeProgress = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+                const current = Math.floor(easeProgress * (end - start) + start);
+                
+                obj.innerHTML = formatFn(current);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    obj.innerHTML = formatFn(end);
+                }
+            };
+            window.requestAnimationFrame(step);
         }
 
         // REAL-TIME DASHBOARD LOGIC
@@ -321,7 +525,6 @@
             const p = urlParams.get('p') || urlParams.get('pwd') || '';
             
             try {
-                // We pass u and p as query params since the backend now supports them
                 const res = await fetch(`/api/stats?period=${period}&u=${u}&p=${p}`);
                 const data = await res.json();
                 updateUI(data);
@@ -329,9 +532,12 @@
         }
 
         function updateUI(data) {
-            document.getElementById('valRevenue').innerHTML = `${data.total_revenue.toLocaleString('uz-UZ')} <span style="font-size: 0.9rem; color: var(--text-muted)">so'm</span>`;
-            document.getElementById('valItems').textContent = data.total_items.toLocaleString('uz-UZ');
-            document.getElementById('valSales').textContent = data.total_transactions.toLocaleString('uz-UZ');
+            const formatMoney = (val) => `${val.toLocaleString('uz-UZ')} <span style="font-size: 0.9rem; color: var(--text-muted)">so'm</span>`;
+            const formatNum = (val) => val.toLocaleString('uz-UZ');
+            
+            animateValue(document.getElementById('valRevenue'), 0, data.total_revenue, 1500, formatMoney);
+            animateValue(document.getElementById('valItems'), 0, data.total_items, 1500, formatNum);
+            animateValue(document.getElementById('valSales'), 0, data.total_transactions, 1500, formatNum);
 
             // Update Staff List
             const staffListEl = document.getElementById('staffList');
@@ -365,20 +571,51 @@
             const ctx = document.getElementById('productsChart').getContext('2d');
             const labels = Object.keys(productsData);
             const values = labels.map(l => productsData[l].revenue);
-            const colors = ['#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9'];
+            const colors = ['#818cf8', '#c084fc', '#10bd8e', '#f5a41d', '#f43f5e', '#0ea5e9']; // Softer colors matching theme
+            
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const labelColor = isDark ? '#94a3b8' : '#64748b';
 
-            if (chartInstance) chartInstance.destroy();
+            if (chartInstance) {
+                chartInstance.data.labels = labels;
+                chartInstance.data.datasets[0].data = values;
+                chartInstance.update();
+                return;
+            }
+            
             chartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     labels: labels,
-                    datasets: [{ data: values, backgroundColor: colors, borderWidth: 0, borderRadius: 8, spacing: 4 }]
+                    datasets: [{ 
+                        data: values, 
+                        backgroundColor: colors, 
+                        borderWidth: 2, 
+                        borderColor: 'transparent',
+                        borderRadius: 6, 
+                        spacing: 2,
+                        hoverOffset: 8
+                    }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false, cutout: '76%',
+                    animation: {
+                        animateScale: true,
+                        animateRotate: true
+                    },
                     plugins: { 
-                        legend: { position: 'bottom', labels: { color: '#94a3b8', usePointStyle: true, padding: 20, font: {family: 'Plus Jakarta Sans', weight: 600} } },
-                        tooltip: { backgroundColor: '#1c222d', cornerRadius: 10, titleFont: {family: 'Plus Jakarta Sans'}, bodyFont: {family: 'Plus Jakarta Sans'}, callbacks: { label: (ctx) => `  ${ctx.raw.toLocaleString('uz-UZ')} so'm` } }
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { color: labelColor, usePointStyle: true, padding: 20, font: {family: 'Plus Jakarta Sans', weight: 600} } 
+                        },
+                        tooltip: { 
+                            backgroundColor: 'rgba(21, 25, 33, 0.9)', 
+                            cornerRadius: 12, 
+                            titleFont: {family: 'Plus Jakarta Sans', size: 14}, 
+                            bodyFont: {family: 'Plus Jakarta Sans', size: 13, weight: 600}, 
+                            padding: 12,
+                            callbacks: { label: (ctx) => `  ${ctx.raw.toLocaleString('uz-UZ')} so'm` } 
+                        }
                     }
                 }
             });
@@ -413,16 +650,17 @@
                 
                 // Determine badge color
                 let badgeClass = 'bg-success';
+                let icon = 'box';
                 let isLow = false;
-                if (p.quantity <= 5) { badgeClass = 'bg-danger'; isLow = true; hasLowStock = true; }
-                else if (p.quantity <= 15) { badgeClass = 'bg-warning'; isLow = true; hasLowStock = true; }
+                if (p.quantity <= 5) { badgeClass = 'bg-danger'; icon = 'alert-octagon'; isLow = true; hasLowStock = true; }
+                else if (p.quantity <= 15) { badgeClass = 'bg-warning'; icon = 'alert-circle'; isLow = true; hasLowStock = true; }
                 
                 item.innerHTML = `
                     <div class="item-info">
                         <div class="item-title">${p.name}</div>
                         <div class="item-meta">${p.category} • ${p.price.toLocaleString('uz-UZ')} so'm</div>
                     </div>
-                    <div class="badge ${badgeClass}">Qoldiq: ${p.quantity} ta</div>
+                    <div class="badge ${badgeClass}"><i data-lucide="${icon}" style="width:14px; height:14px;"></i> Qoldiq: ${p.quantity} ta</div>
                 `;
                 
                 if (isLow) {
@@ -436,6 +674,9 @@
             if (goodStockList.children.length === 0) {
                 goodStockList.innerHTML = '<div style="color: var(--text-muted); padding: 10px;">Mahsulot yo\'q</div>';
             }
+            
+            // Render icons for newly added HTML
+            lucide.createIcons();
         }
 
         // Real-time: Poll every 10 seconds
@@ -443,6 +684,7 @@
             fetchStats();
             fetchInventory();
         }, 10000);
+        
         fetchStats();
         fetchInventory();
     </script>

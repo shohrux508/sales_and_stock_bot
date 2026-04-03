@@ -19,10 +19,11 @@ def categories_list_kb(categories, for_selection=False) -> InlineKeyboardMarkup:
         cb_data = f"select_cat_{cat.id}" if for_selection else f"manage_cat_{cat.id}"
         builder.button(text=cat.name, callback_data=cb_data)
         
+    builder.adjust(2)
+    
     if not for_selection:
-        builder.button(text="➕ Kategoriya yaratish", callback_data="add_category")
+        builder.row(InlineKeyboardButton(text="➕ Kategoriya yaratish", callback_data="add_category"))
         
-    builder.adjust(1)
     return builder.as_markup()
 
 def products_list_kb(products) -> InlineKeyboardMarkup:
@@ -30,14 +31,13 @@ def products_list_kb(products) -> InlineKeyboardMarkup:
     
     for product in products:
         builder.button(
-            text=f"{product.name} ({product.quantity} dona)",
+            text=f"{product.name} ({product.quantity} ta)",
             callback_data=f"prod_edit_{product.id}"
         )
     
-    # Add new product at the end
-    builder.button(text="➕ Mahsulot qo'shish", callback_data="add_product")
+    builder.adjust(2)
+    builder.row(InlineKeyboardButton(text="➕ Mahsulot qo'shish", callback_data="add_product"))
     
-    builder.adjust(1) # one button per row
     return builder.as_markup()
 
 def product_edit_kb(product_id: int) -> InlineKeyboardMarkup:
@@ -57,9 +57,15 @@ def product_delete_confirm_kb(product_id: int) -> InlineKeyboardMarkup:
     builder.adjust(1)
     return builder.as_markup()
 
-def cancel_kb() -> ReplyKeyboardMarkup:
-    kb = [[KeyboardButton(text="Bekor qilish")]]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+def cancel_admin_inline_kb() -> InlineKeyboardMarkup:
+    """Inline-кнопка отмены для админа (не заменяет нижнюю клавиатуру)."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="❌ Bekor qilish", callback_data="admin_cancel")
+    return builder.as_markup()
+
+# Обратная совместимость — старое имя указывает на inline-версию
+def cancel_kb() -> InlineKeyboardMarkup:
+    return cancel_admin_inline_kb()
 
 def stats_periods_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
@@ -101,13 +107,13 @@ def staff_list_kb(workers) -> InlineKeyboardMarkup:
     for w in workers:
         role_label = ""
         if w.role == UserRole.PENDING:
-            role_label = " (⏳ so'rov)"
+            role_label = " (⏳)"
         elif w.role == UserRole.BANNED:
-            role_label = " (🚫 bloklangan)"
+            role_label = " (🚫)"
             
         name = w.username or f"ID {w.tg_id}"
         builder.button(text=f"👤 {name}{role_label}", callback_data=f"staff_profile_{w.tg_id}")
-    builder.adjust(1)
+    builder.adjust(2)
     return builder.as_markup()
 
 def staff_profile_kb(tg_id: int, role: UserRole) -> InlineKeyboardMarkup:
