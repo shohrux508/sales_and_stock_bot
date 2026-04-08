@@ -159,7 +159,7 @@ async def cb_category_delete_confirm(call: types.CallbackQuery, container: Conta
     from app.telegram.keyboards.admin import category_delete_confirm_kb
 
     n = await category_service.count_products_in_category(cat_id)
-    extra = "" if n == 0 else f"\n\n⚠️ Ichida <b>{n}</b> ta mahsulot bor — avval ularni boshqa kategoriyaga ko'chiring yoki o'chiring."
+    extra = "" if n == 0 else f"\n\n⚠️ Diqqat: Bu kategoriyada <b>{n}</b> ta mahsulot bor. Kategoriya o'chirilsa, mahsulotlar o'chirilmaydi, faqat 'Kategoriyasiz' bo'lib qoladi."
     await call.message.edit_text(
         f"🗑 <b>{html_mod.escape(cat.name)}</b> kategoriyasini o'chirishni tasdiqlaysizmi?{extra}",
         parse_mode="HTML",
@@ -177,7 +177,7 @@ async def cb_category_delete_yes(call: types.CallbackQuery, container: Container
         await call.message.edit_text("Kategoriyalarni boshqarish:", reply_markup=categories_list_kb(categories))
     else:
         await call.answer(
-            "O'chirib bo'lmadi: kategoriyada mahsulotlar bor yoki kategoriya topilmadi.",
+            "Xatolik: kategoriya topilmadi.",
             show_alert=True,
         )
 

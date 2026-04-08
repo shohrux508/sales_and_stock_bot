@@ -55,13 +55,18 @@ class CategoryService:
                 raise
 
     async def delete_category(self, category_id: int) -> bool:
-        """Deletes category only if it has no products (avoids accidental cascade)."""
+        """Deletes category and unlinks products (sets their category_id to NULL)."""
         async with self.session_maker() as session:
-            cnt_stmt = select(func.count()).select_from(Product).where(Product.category_id == category_id)
-            n = int((await session.execute(cnt_stmt)).scalar_one() or 0)
-            if n > 0:
+            cat = await session.get(Category, category_id)
+            if not cat:
                 return False
-            stmt = delete(Category).where(Category.id == category_id)
-            result = await session.execute(stmt)
+            
+            # Unlink products instead of deleting them or blocking
+            from sqlalchemy import update
+            await session.execute(
+                update(Product).where(Product.category_id == category_id).values(category_id=None)
+            )
+            
+            await session.delete(cat)
             await session.commit()
-            return result.rowcount > 0
+            return True
