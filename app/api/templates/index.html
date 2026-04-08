@@ -149,9 +149,35 @@
             box-shadow: var(--glass-shadow);
         }
 
-        select:hover, .theme-btn:hover {
+        select:hover, .theme-btn:hover, .search-field:focus {
             border-color: var(--primary);
             background: var(--surface-hover);
+        }
+
+        .search-field {
+            width: 100%;
+            max-width: 320px;
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            border-radius: 14px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.2s ease;
+            box-shadow: var(--glass-shadow);
+        }
+
+        .search-field::placeholder { color: var(--text-muted); }
+
+        .meta-refresh {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            white-space: nowrap;
         }
         
         .theme-btn {
@@ -366,9 +392,11 @@
                     <button class="theme-btn" onclick="toggleTheme()" title="Mavzuni o'zgartirish">
                         <i data-lucide="moon" id="themeIcon"></i>
                     </button>
+                    <span id="lastRefresh" class="meta-refresh" title="Avtomatik yangilanish: 10 s"></span>
                     <select id="periodSelect" onchange="fetchStats()">
                         <option value="today">Bugun</option>
                         <option value="week" selected>7 kunlik</option>
+                        <option value="month">30 kunlik</option>
                     </select>
                 </div>
             </header>
@@ -411,6 +439,13 @@
                     </div>
                 </div>
             </div>
+
+            <div class="card-box">
+                <h2><i data-lucide="trending-up"></i> Top mahsulotlar (tushum bo'yicha)</h2>
+                <div id="topProductsList" class="list-container">
+                    <div style="color: var(--text-muted); text-align: center; padding: 16px;">Ma'lumotlar yo'q</div>
+                </div>
+            </div>
         </div>
 
         <!-- PAGE 2: INVENTORY -->
@@ -423,11 +458,16 @@
                     <h1>Ombor Holati</h1>
                 </div>
                 <div class="header-controls">
-                    <button class="theme-btn" onclick="toggleTheme()">
+                    <span id="lastRefreshInv" class="meta-refresh"></span>
+                    <button type="button" class="theme-btn" onclick="toggleTheme()" title="Mavzuni o'zgartirish">
                         <i data-lucide="moon" class="themeIconClone"></i>
                     </button>
                 </div>
             </header>
+
+            <div class="card-box" style="padding-bottom: 16px;">
+                <input type="search" class="search-field" id="inventorySearch" placeholder="Qidirish: nom yoki kategoriya..." autocomplete="off" />
+            </div>
 
             <div class="card-box" id="lowStockBox" style="display: none; border-color: rgba(239, 68, 68, 0.3);">
                 <h2 style="color: var(--danger)"><i data-lucide="alert-triangle"></i> Zudlik bilan to'ldirish kerak (Tanqis)</h2>
@@ -448,11 +488,11 @@
 
     <!-- BOTTOM NAVIGATION TABS -->
     <nav class="bottom-nav">
-        <button class="nav-btn active" onclick="switchTab('dashboard', this)">
+        <button type="button" class="nav-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">
             <i data-lucide="layout-dashboard"></i>
             <span>Asosiy</span>
         </button>
-        <button class="nav-btn" onclick="switchTab('inventory', this)">
+        <button type="button" class="nav-btn" data-tab="inventory" onclick="switchTab('inventory')">
             <i data-lucide="box"></i>
             <span>Ombor</span>
         </button>
@@ -483,12 +523,20 @@
         }
 
         // TAB SWITCHING LOGIC
-        function switchTab(tabId, btnContext) {
+        function switchTab(tabId) {
             document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-            
             document.getElementById(`page-${tabId}`).classList.add('active');
-            btnContext.classList.add('active');
+            document.querySelector(`.nav-btn[data-tab="${tabId}"]`)?.classList.add('active');
+        }
+
+        function setRefreshLabels() {
+            const t = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const el = document.getElementById('lastRefresh');
+            const el2 = document.getElementById('lastRefreshInv');
+            const label = `Yangilandi: ${t}`;
+            if (el) el.textContent = label;
+            if (el2) el2.textContent = label;
         }
 
         // NUMBER ANIMATION LOGIC
@@ -528,6 +576,7 @@
                 const res = await fetch(`/api/stats?period=${period}&u=${u}&p=${p}`);
                 const data = await res.json();
                 updateUI(data);
+                setRefreshLabels();
             } catch (e) { console.error("Update failed", e); }
         }
 
@@ -565,6 +614,30 @@
             });
 
             updateChart(data.products_breakdown);
+
+            const topEl = document.getElementById('topProductsList');
+            if (topEl) {
+                const top = Object.entries(data.products_breakdown)
+                    .sort((a, b) => b[1].revenue - a[1].revenue)
+                    .slice(0, 5);
+                if (top.length === 0) {
+                    topEl.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 16px;">Ma\'lumotlar yo\'q</div>';
+                } else {
+                    topEl.innerHTML = '';
+                    top.forEach(([name, stats], i) => {
+                        const row = document.createElement('div');
+                        row.className = 'list-item';
+                        row.innerHTML = `
+                            <div class="item-info">
+                                <div class="item-title">${i + 1}. ${name}</div>
+                                <div class="item-meta">${stats.count} dona sotilgan</div>
+                            </div>
+                            <div class="item-value val-success">${stats.revenue.toLocaleString('uz-UZ')} so'm</div>
+                        `;
+                        topEl.appendChild(row);
+                    });
+                }
+            }
         }
 
         function updateChart(productsData) {
@@ -622,6 +695,8 @@
         }
 
         // INVENTORY LOGIC
+        let lastInventory = [];
+
         async function fetchInventory() {
             const urlParams = new URLSearchParams(window.location.search);
             const u = urlParams.get('u') || urlParams.get('user') || 'admin';
@@ -630,11 +705,24 @@
             try {
                 const res = await fetch(`/api/inventory?u=${u}&p=${p}`);
                 const data = await res.json();
-                updateInventoryUI(data.inventory);
+                lastInventory = data.inventory || [];
+                applyInventoryFilter(document.getElementById('inventorySearch')?.value || '');
+                setRefreshLabels();
             } catch (e) { console.error("Inventory update failed", e); }
         }
 
-        function updateInventoryUI(products) {
+        function applyInventoryFilter(rawQuery) {
+            const q = (rawQuery || '').trim().toLowerCase();
+            const products = !q
+                ? lastInventory
+                : lastInventory.filter(p =>
+                    (p.name && p.name.toLowerCase().includes(q)) ||
+                    (p.category && String(p.category).toLowerCase().includes(q))
+                );
+            renderInventoryLists(products);
+        }
+
+        function renderInventoryLists(products) {
             const lowStockList = document.getElementById('lowStockList');
             const goodStockList = document.getElementById('goodStockList');
             const lowStockBox = document.getElementById('lowStockBox');
@@ -672,12 +760,18 @@
             
             lowStockBox.style.display = hasLowStock ? 'block' : 'none';
             if (goodStockList.children.length === 0) {
-                goodStockList.innerHTML = '<div style="color: var(--text-muted); padding: 10px;">Mahsulot yo\'q</div>';
+                const emptyMsg = lastInventory.length === 0
+                    ? 'Mahsulot yo\'q'
+                    : 'Qidiruv bo\'yicha natija yo\'q';
+                goodStockList.innerHTML = `<div style="color: var(--text-muted); padding: 10px;">${emptyMsg}</div>`;
             }
             
-            // Render icons for newly added HTML
             lucide.createIcons();
         }
+
+        document.getElementById('inventorySearch')?.addEventListener('input', (e) => {
+            applyInventoryFilter(e.target.value);
+        });
 
         // Real-time: Poll every 10 seconds
         setInterval(() => {

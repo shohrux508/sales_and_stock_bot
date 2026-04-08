@@ -26,6 +26,21 @@ def categories_list_kb(categories, for_selection=False) -> InlineKeyboardMarkup:
         
     return builder.as_markup()
 
+def category_manage_kb(category_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✏️ Nomini o'zgartirish", callback_data=f"cat_rename_{category_id}")
+    builder.button(text="🗑 O'chirish", callback_data=f"cat_del_conf_{category_id}")
+    builder.button(text="🔙 Ro'yxatga qaytish", callback_data="cat_list")
+    builder.adjust(1)
+    return builder.as_markup()
+
+def category_delete_confirm_kb(category_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Ha, o'chirish", callback_data=f"cat_del_yes_{category_id}")
+    builder.button(text="❌ Yo'q", callback_data=f"manage_cat_{category_id}")
+    builder.adjust(1)
+    return builder.as_markup()
+
 def products_list_kb(products) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     
@@ -71,9 +86,11 @@ def stats_periods_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="📅 Bugun uchun", callback_data="stats_period_today")
     builder.button(text="🗓 7 kun uchun", callback_data="stats_period_week")
-    builder.button(text="📥 Sotuvlar hisoboti (bugun)", callback_data="export_excel_today")
+    builder.button(text="📆 30 kun uchun", callback_data="stats_period_month")
+    builder.button(text="📥 Sotuvlar (bugun)", callback_data="export_excel_today")
+    builder.button(text="📥 Sotuvlar (7 kun)", callback_data="export_excel_week")
     builder.button(text="📦 Ombor hisoboti", callback_data="export_inventory_excel")
-    builder.adjust(2, 1, 1)
+    builder.adjust(2, 1, 2, 1)
     return builder.as_markup()
 
 def approve_user_kb(tg_id: int) -> InlineKeyboardMarkup:

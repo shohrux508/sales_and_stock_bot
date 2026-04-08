@@ -8,7 +8,7 @@ from app.services.user_service import UserService
 from app.services.category_service import CategoryService
 from app.services.transaction_service import TransactionService
 
-from app.telegram.states.admin import AddProductState, AddCategoryState, WaitAdminReply, EditStaffProfileState
+from app.telegram.states.admin import AddProductState, AddCategoryState, EditCategoryState, WaitAdminReply, EditStaffProfileState
 from app.telegram.keyboards.admin import (
     main_admin_kb, 
     products_list_kb, 
@@ -94,10 +94,92 @@ async def process_add_category_name(message: types.Message, state: FSMContext, c
     finally:
         await state.clear()
 
+@router.callback_query(F.data == "cat_list")
+async def cb_category_list(call: types.CallbackQuery, container: Container):
+    category_service: CategoryService = container.get("category_service")
+    categories = await category_service.get_all_categories()
+    await call.message.edit_text("Kategoriyalarni boshqarish:", reply_markup=categories_list_kb(categories))
+
 @router.callback_query(F.data.startswith("manage_cat_"))
-async def cb_manage_category(call: types.CallbackQuery):
+async def cb_manage_category(call: types.CallbackQuery, container: Container):
+    import html as html_mod
+
     cat_id = int(call.data.split("_")[2])
-    await call.answer(f"Kategoriya ID {cat_id} ni boshqarish (ishlanmoqda)", show_alert=True)
+    category_service: CategoryService = container.get("category_service")
+    cat = await category_service.get_category_by_id(cat_id)
+    if not cat:
+        await call.answer("Kategoriya topilmadi.", show_alert=True)
+        return
+    n = await category_service.count_products_in_category(cat_id)
+    text = (
+        f"🗂 <b>{html_mod.escape(cat.name)}</b>\n"
+        f"Mahsulotlar: <b>{n}</b> ta\n\n"
+        f"Amalni tanlang:"
+    )
+    from app.telegram.keyboards.admin import category_manage_kb
+
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=category_manage_kb(cat_id))
+
+@router.callback_query(F.data.startswith("cat_rename_"))
+async def cb_category_rename_start(call: types.CallbackQuery, state: FSMContext):
+    cat_id = int(call.data.split("_")[2])
+    await state.update_data(edit_category_id=cat_id)
+    await state.set_state(EditCategoryState.name)
+    await call.message.edit_text("Yangi kategoriya nomini kiriting:", reply_markup=cancel_admin_inline_kb())
+
+@router.message(EditCategoryState.name)
+async def process_category_rename(message: types.Message, state: FSMContext, container: Container):
+    from sqlalchemy.exc import IntegrityError
+
+    data = await state.get_data()
+    cat_id = data.get("edit_category_id")
+    category_service: CategoryService = container.get("category_service")
+    name = message.text.strip()
+    try:
+        updated = await category_service.rename_category(cat_id, name)
+    except IntegrityError:
+        await message.answer("❌ Bunday nomli kategoriya allaqachon mavjud. Boshqa nom kiriting:")
+        return
+    await state.clear()
+    if updated:
+        await message.answer(f"✅ Kategoriya nomi yangilandi: <b>{name}</b>", parse_mode="HTML", reply_markup=main_admin_kb())
+    else:
+        await message.answer("❌ Kategoriya topilmadi yoki nom bo'sh.", reply_markup=main_admin_kb())
+
+@router.callback_query(F.data.startswith("cat_del_conf_"))
+async def cb_category_delete_confirm(call: types.CallbackQuery, container: Container):
+    import html as html_mod
+
+    cat_id = int(call.data.split("_")[3])
+    category_service: CategoryService = container.get("category_service")
+    cat = await category_service.get_category_by_id(cat_id)
+    if not cat:
+        await call.answer("Kategoriya topilmadi.", show_alert=True)
+        return
+    from app.telegram.keyboards.admin import category_delete_confirm_kb
+
+    n = await category_service.count_products_in_category(cat_id)
+    extra = "" if n == 0 else f"\n\n⚠️ Ichida <b>{n}</b> ta mahsulot bor — avval ularni boshqa kategoriyaga ko'chiring yoki o'chiring."
+    await call.message.edit_text(
+        f"🗑 <b>{html_mod.escape(cat.name)}</b> kategoriyasini o'chirishni tasdiqlaysizmi?{extra}",
+        parse_mode="HTML",
+        reply_markup=category_delete_confirm_kb(cat_id),
+    )
+
+@router.callback_query(F.data.startswith("cat_del_yes_"))
+async def cb_category_delete_yes(call: types.CallbackQuery, container: Container):
+    cat_id = int(call.data.split("_")[3])
+    category_service: CategoryService = container.get("category_service")
+    ok = await category_service.delete_category(cat_id)
+    if ok:
+        await call.answer("Kategoriya o'chirildi.", show_alert=True)
+        categories = await category_service.get_all_categories()
+        await call.message.edit_text("Kategoriyalarni boshqarish:", reply_markup=categories_list_kb(categories))
+    else:
+        await call.answer(
+            "O'chirib bo'lmadi: kategoriyada mahsulotlar bor yoki kategoriya topilmadi.",
+            show_alert=True,
+        )
 
 # --- Add Product ---
 @router.callback_query(F.data == "add_product")
@@ -495,7 +577,12 @@ async def process_stats(call: types.CallbackQuery, container: Container):
     # Staff rankings
     rankings = await transaction_service.get_staff_rankings(period)
     
-    period_str = "bugun" if period == "today" else "so'nggi 7 kun"
+    if period == "today":
+        period_str = "bugun"
+    elif period == "month":
+        period_str = "so'nggi 30 kun"
+    else:
+        period_str = "so'nggi 7 kun"
     
     text = f"📊 <b>{period_str.capitalize()} statistikasi:</b>\n\n"
     text += f"Jami cheklar: <b>{total_sales}</b>\n"
@@ -516,7 +603,7 @@ async def process_stats(call: types.CallbackQuery, container: Container):
             text += f"{i}. <b>@{name}</b> — {rank.revenue:,} so'm. (<i>{rank.items} dona.</i>)\n"
         text += "</blockquote>"
             
-    await call.message.edit_text(text, parse_mode="HTML")
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=stats_periods_kb())
 
 # --- Rollbacks F3 ---
 @router.callback_query(F.data.startswith("undo_tx_"))

@@ -202,12 +202,14 @@ class TransactionService:
         """Returns list of (tg_id, username, total_revenue, total_items) ranked by revenue."""
         async with self.session_maker() as session:
             from datetime import timedelta
+
+            uzt_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5)))
             if period == "today":
                 start_date = self._get_start_of_day_utc()
+            elif period == "month":
+                start_date = (uzt_now - timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
             else:
-                from datetime import timedelta
-                # Last 7 days in UZT
-                uzt_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5)))
+                # week (default for non-today)
                 start_date = (uzt_now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
 
             from sqlalchemy import func
@@ -227,19 +229,19 @@ class TransactionService:
             return result.all()
 
     async def get_admin_statistics(self, period: str = "today", user_id: int | None = None) -> Sequence[Transaction]:
-        """Gets all sales for administration depending on period (today or week)"""
+        """Sales for admin reports: period today | week | month (30 days, UZT)."""
         async with self.session_maker() as session:
             from datetime import timedelta
-            now = datetime.now(timezone.utc)
-            
+
+            uzt_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5)))
             if period == "today":
                 start_date = self._get_start_of_day_utc()
             elif period == "week":
-                from datetime import timedelta
-                uzt_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5)))
                 start_date = (uzt_now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+            elif period == "month":
+                start_date = (uzt_now - timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
             else:
-                start_date = self._get_start_of_day_utc() # fallback
+                start_date = self._get_start_of_day_utc()
                 
             from sqlalchemy.orm import selectinload
             

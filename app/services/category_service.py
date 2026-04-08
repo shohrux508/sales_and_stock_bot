@@ -1,9 +1,10 @@
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
+from sqlalchemy.exc import IntegrityError
 from typing import Sequence
 import logging
 
-from app.database.models import Category
+from app.database.models import Category, Product
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +32,35 @@ class CategoryService:
             await session.refresh(category)
             return category
 
-    async def delete_category(self, category_id: int) -> bool:
+    async def count_products_in_category(self, category_id: int) -> int:
         async with self.session_maker() as session:
+            stmt = select(func.count()).select_from(Product).where(Product.category_id == category_id)
+            return int((await session.execute(stmt)).scalar_one() or 0)
+
+    async def rename_category(self, category_id: int, name: str) -> Category | None:
+        name = name.strip()
+        if not name:
+            return None
+        async with self.session_maker() as session:
+            cat = await session.get(Category, category_id)
+            if not cat:
+                return None
+            cat.name = name
+            try:
+                await session.commit()
+                await session.refresh(cat)
+                return cat
+            except IntegrityError:
+                await session.rollback()
+                raise
+
+    async def delete_category(self, category_id: int) -> bool:
+        """Deletes category only if it has no products (avoids accidental cascade)."""
+        async with self.session_maker() as session:
+            cnt_stmt = select(func.count()).select_from(Product).where(Product.category_id == category_id)
+            n = int((await session.execute(cnt_stmt)).scalar_one() or 0)
+            if n > 0:
+                return False
             stmt = delete(Category).where(Category.id == category_id)
             result = await session.execute(stmt)
             await session.commit()
