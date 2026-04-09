@@ -1,9 +1,14 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Загружаем .env файл из текущей директории или директории с EXE
-env_path = Path(".") / ".env"
+if getattr(sys, 'frozen', False):
+    APP_PATH = os.path.dirname(sys.executable)
+else:
+    APP_PATH = os.path.dirname(os.path.abspath(__file__))
+
+env_path = Path(APP_PATH) / ".env"
 load_dotenv(dotenv_path=env_path)
 
 # ============================================

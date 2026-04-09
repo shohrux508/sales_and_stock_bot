@@ -13,7 +13,7 @@ pip install -r requirements.txt
 
 REM Build the EXE
 echo [2/3] Building executable...
-pyinstaller --onefile --noconsole --name "PrinterClient" --clean client.py
+python -m PyInstaller --onefile --noconsole --name "PrinterClient" --clean client.py
 
 echo.
 echo [3/3] Done! 

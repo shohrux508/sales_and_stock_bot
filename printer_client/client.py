@@ -20,16 +20,33 @@ import tkinter as tk
 from tkinter import simpledialog, messagebox
 from pathlib import Path
 from dotenv import set_key
+import websockets
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
 from config import SERVER_WS_URL, SECRET_TOKEN, RECONNECT_DELAY, PRINTER_MODE, SHOP_NAME, SELLER_ID
 from receipt_printer import print_receipt, print_receipt_console
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# Определяем корневой путь (важно для EXE)
+import os
+if getattr(sys, 'frozen', False):
+    APP_PATH = os.path.dirname(sys.executable)
+else:
+    APP_PATH = os.path.dirname(os.path.abspath(__file__))
+
+# Универсальное логирование в файл, чтобы --noconsole не падал
+log_file = os.path.join(APP_PATH, "printer_client.log")
+try:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[
+            logging.FileHandler(log_file, encoding='utf-8')
+        ]
+    )
+except Exception:
+    pass # Если не можем писать в файл, отключаем базовое логгирование
+
 logger = logging.getLogger("printer_client")
 
 # Глобальные переменные для управления состоянием
@@ -181,20 +198,21 @@ async def run_client(current_seller_id: str):
 
 
 def create_image():
-    """Создает простую иконку принтера для трея."""
+    """Создает очень яркую иконку принтера для трея."""
     width = 64
     height = 64
-    image = Image.new('RGB', (width, height), color=(255, 255, 255))
+    # Используем сплошной яркий цвет, чтобы Windows точно его заметила
+    image = Image.new('RGB', (width, height), color=(0, 255, 150))
     dc = ImageDraw.Draw(image)
     
-    # Рисуем упрощенную иконку принтера (синий прямоугольник с белым листом)
-    dc.rectangle([10, 20, 54, 50], fill=(50, 50, 200)) # Корпус
-    dc.rectangle([15, 10, 49, 25], fill=(220, 220, 220)) # Бумага сверху
-    dc.rectangle([15, 45, 49, 60], fill=(220, 220, 220)) # Чек снизу
+    # Рисуем контрастную черную рамку
+    dc.rectangle([5, 5, 59, 59], outline=(0, 0, 0), width=4)
+    # И белую линию "бумаги" в центре
+    dc.rectangle([15, 25, 49, 35], fill=(255, 255, 255))
     
     return image
 
-def show_settings_gui():
+def show_settings_gui(is_startup=False):
     """Показывает GUI для настройки."""
     global SELLER_ID
     import config
@@ -220,21 +238,23 @@ def show_settings_gui():
     if not new_printer_name:
         return
         
-    # Сохраняем в .env
-    env_path = Path(".") / ".env"
+    # Сохраняем в .env рядом с EXE
+    env_path = Path(APP_PATH) / ".env"
     env_path.touch(exist_ok=True)
     
     set_key(env_path, "SELLER_ID", new_seller_id)
     set_key(env_path, "PRINTER_NAME_WIN", new_printer_name)
     
-    # Обновляем переменные в памяти для текущего запуска
     config.SELLER_ID = new_seller_id
     config.PRINTER_NAME_WIN = new_printer_name
     
-    messagebox.showinfo("Настройки сохранены", "Настройки обновлены! Пожалуйста, перезапустите приложение.")
-    
-    # Если изменяем настройки "на лету", лучше выйти для чистого рестарта
-    os._exit(0)
+    if not is_startup:
+        messagebox.showinfo("Настройки сохранены", "Настройки сохранены! Приложение закроется для применения настроек. Запустите его снова.")
+        root.destroy()
+        os._exit(0)
+    else:
+        messagebox.showinfo("Настройки сохранены", "Успешно! Приложение запускается в фоне.")
+        root.destroy()
 
 def on_quit(icon, item):
     """Выход из приложения."""
@@ -245,20 +265,25 @@ def on_quit(icon, item):
 def on_change_settings(icon, item):
     """Изменение настроек через трей."""
     # Запускаем в отдельном потоке чтобы не блокировать трей
-    threading.Thread(target=show_settings_gui, daemon=True).start()
+    threading.Thread(target=lambda: show_settings_gui(is_startup=False), daemon=True).start()
 
 def setup_tray():
     """Настройка и запуск иконки в трее."""
     global tray_icon
-    icon_image = create_image()
-    menu = (
-        item('Настройки', on_change_settings),
-        item('Выход', on_quit),
-    )
-    tray_icon = pystray.Icon("printer_client", icon_image, f"{SHOP_NAME}: Инициализация...", menu)
-    
-    # Показываем уведомление при запуске
-    tray_icon.run(setup=lambda icon: icon.notify("Приложение запущено и работает в фоне", SHOP_NAME))
+    logger.info("Инициализация системного трея...")
+    try:
+        icon_image = create_image()
+        menu = (
+            item('Настройки', on_change_settings),
+            item('Выход', on_quit),
+        )
+        tray_icon = pystray.Icon("printer_client", icon_image, f"{SHOP_NAME}: Подключение...", menu)
+        
+        # Запускаем уведомление и цикл обработки событий трея
+        logger.info("Запуск цикла событий pystray...")
+        tray_icon.run(setup=lambda icon: icon.notify("Приложение запущено и работает в фоне", SHOP_NAME))
+    except Exception as e:
+        logger.error(f"Критическая ошибка при создании трея: {e}")
 
 def main():
     """Точка входа."""
@@ -267,7 +292,7 @@ def main():
     # Проверка настроек при старте
     if not config.SELLER_ID:
         # Если ID продавца нет, показываем диалог настройки
-        show_settings_gui()
+        show_settings_gui(is_startup=True)
         # Если после диалога ID всё ещё нет (отменили), выходим
         if not config.SELLER_ID:
             sys.exit(0)
