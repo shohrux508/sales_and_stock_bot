@@ -1,40 +1,43 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Загружаем .env файл из текущей директории или директории с EXE
+env_path = Path(".") / ".env"
+load_dotenv(dotenv_path=env_path)
+
 # ============================================
 # Настройки клиента печати чеков (Xprinter)
 # ============================================
 
-# URL WebSocket-сервера (заменить на ваш домен)
-# Для Railway/облака: wss://your-domain.com/ws/printer/{token}
-# Для тестирования локально: ws://localhost:8000/ws/printer/{token}
-SERVER_WS_URL = "wss://salesmanager.up.railway.app/ws/printer/{token}"
+# URL WebSocket-сервера
+# По умолчанию берется из переменной SERVER_WS_URL или хардкод
+SERVER_WS_URL = os.getenv("SERVER_WS_URL", "wss://salesmanager.up.railway.app/ws/printer/{token}")
 
 # Секретный токен (должен совпадать с PRINTER_SECRET_TOKEN в .env сервера)
-SECRET_TOKEN = "xprinter-sale-stock-2026-secret"
+SECRET_TOKEN = os.getenv("SECRET_TOKEN", "xprinter-sale-stock-2026-secret")
+
+# ID продавца
+SELLER_ID = os.getenv("SELLER_ID", "")
 
 # Интервал переподключения при обрыве связи (секунды)
-RECONNECT_DELAY = 5
+RECONNECT_DELAY = int(os.getenv("RECONNECT_DELAY", "5"))
 
 # ============================================
 # Настройки USB-принтера Xprinter
 # ============================================
-# Определить через Device Manager или Zadig (Windows)
-# Стандартные значения для Xprinter XP-58IIH / XP-365B:
-PRINTER_VENDOR_ID = 0x0483
-PRINTER_PRODUCT_ID = 0x070B
+# Стандартные значения для Xprinter XP-58IIH / XP-365B
+PRINTER_VENDOR_ID = int(os.getenv("PRINTER_VENDOR_ID", "0x0483"), 16)
+PRINTER_PRODUCT_ID = int(os.getenv("PRINTER_PRODUCT_ID", "0x070B"), 16)
 
-# Альтернатива: использовать имя принтера Windows (fallback)
-# Если USB не работает, можно использовать имя принтера из "Устройства и принтеры"
-PRINTER_NAME_WIN = "POSPrinter POS58"
+# Альтернатива: имя принтера Windows
+PRINTER_NAME_WIN = os.getenv("PRINTER_NAME_WIN", "POSPrinter POS58")
 
 # ============================================
 # Настройки чека
 # ============================================
-# Название магазина (шапка чека)
-SHOP_NAME = "Sale & Stock Bot"
-
-# Ширина бумаги (32 символа для 58mm, 48 символов для 80mm)
-RECEIPT_WIDTH = 32
+SHOP_NAME = os.getenv("SHOP_NAME", "Sale & Stock Bot")
+RECEIPT_WIDTH = int(os.getenv("RECEIPT_WIDTH", "32"))
 
 # Режим принтера: "usb" или "windows"
-# "usb" — python-escpos через pyusb (требует Zadig)
-# "windows" — через win32print (стандартный драйвер Windows)
-PRINTER_MODE = "windows"
+PRINTER_MODE = os.getenv("PRINTER_MODE", "windows")

@@ -24,7 +24,11 @@ router.callback_query.filter(lambda event, db_user=None: db_user is not None)
 
 @router.message(F.text == "/start")
 async def worker_start(message: types.Message, db_user: User):
-    await message.answer(f"Xodimlar paneliga xush kelibsiz, {db_user.username or db_user.tg_id}!", reply_markup=main_worker_kb())
+    welcome_text = (
+        f"Xodimlar paneliga xush kelibsiz, {db_user.username or db_user.tg_id}!\n\n"
+        f"🖨️ Sizning ID raqamingiz (printer uchun): <b>{db_user.id}</b>"
+    )
+    await message.answer(welcome_text, reply_markup=main_worker_kb(), parse_mode="HTML")
 
 @router.message(F.text == "Bekor qilish")
 async def cancel_handler(message: types.Message, state: FSMContext):
@@ -245,6 +249,7 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
         "order_id": order_group_id,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "worker_name": worker_name,
+        "seller_id": str(db_user.id),
         "items": [
             {
                 "name": tx.product.name,

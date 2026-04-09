@@ -12,12 +12,16 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
+import threading
+from PIL import Image, ImageDraw
+import pystray
+from pystray import MenuItem as item
+import tkinter as tk
+from tkinter import simpledialog, messagebox
+from pathlib import Path
+from dotenv import set_key
 
-import websockets
-from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
-
-from config import SERVER_WS_URL, SECRET_TOKEN, RECONNECT_DELAY, PRINTER_MODE
+from config import SERVER_WS_URL, SECRET_TOKEN, RECONNECT_DELAY, PRINTER_MODE, SHOP_NAME, SELLER_ID
 from receipt_printer import print_receipt, print_receipt_console
 
 # Настройка логирования
@@ -28,8 +32,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("printer_client")
 
-# Определяем, доступен ли реальный принтер
+# Глобальные переменные для управления состоянием
 REAL_PRINTER_AVAILABLE = False
+tray_icon = None
 
 def check_printer():
     """Проверка доступности принтера."""
@@ -69,6 +74,12 @@ def check_printer():
 def handle_print_job(data: dict) -> None:
     """Обработка задания на печать."""
     order_id = data.get("order_id", "N/A")
+    total_amount = data.get("total_amount", 0)
+    currency = data.get("currency", "UZS")
+    
+    # Показываем уведомление в Windows
+    if tray_icon:
+        tray_icon.notify(f"Сумма: {total_amount:,.0f} {currency}", "🖨️ Получен новый чек!")
     
     # Тестовая печать в консоль всегда
     print_receipt_console(data)
@@ -86,9 +97,11 @@ def handle_print_job(data: dict) -> None:
         logger.info(f"📋 Чек #{order_id} выведен только в консоль (принтер не подключен)")
 
 
-async def run_client():
+async def run_client(current_seller_id: str):
     """Основной цикл WebSocket-клиента."""
     url = SERVER_WS_URL.format(token=SECRET_TOKEN)
+    if current_seller_id:
+        url += f"?seller_id={current_seller_id}"
     
     logger.info("=" * 50)
     logger.info("  Sale & Stock Bot — Printer Client")
@@ -109,6 +122,10 @@ async def run_client():
                 close_timeout=5,
             ) as ws:
                 logger.info("✅ Подключено к серверу! Ожидание заданий на печать...")
+                
+                # Обновляем статус в трее
+                if tray_icon:
+                    tray_icon.title = f"{SHOP_NAME}: Подключен"
                 
                 while True:
                     try:
@@ -152,6 +169,10 @@ async def run_client():
         except Exception as e:
             logger.error(f"❌ Неожиданная ошибка: {e}. Повторная попытка через {RECONNECT_DELAY}с...")
         
+        # Обновляем статус при ошибке подключения
+        if tray_icon:
+            tray_icon.title = f"{SHOP_NAME}: Отключен (переподключение...)"
+        
         # Переподключение
         await asyncio.sleep(RECONNECT_DELAY)
         
@@ -159,14 +180,110 @@ async def run_client():
         check_printer()
 
 
+def create_image():
+    """Создает простую иконку принтера для трея."""
+    width = 64
+    height = 64
+    image = Image.new('RGB', (width, height), color=(255, 255, 255))
+    dc = ImageDraw.Draw(image)
+    
+    # Рисуем упрощенную иконку принтера (синий прямоугольник с белым листом)
+    dc.rectangle([10, 20, 54, 50], fill=(50, 50, 200)) # Корпус
+    dc.rectangle([15, 10, 49, 25], fill=(220, 220, 220)) # Бумага сверху
+    dc.rectangle([15, 45, 49, 60], fill=(220, 220, 220)) # Чек снизу
+    
+    return image
+
+def show_settings_gui():
+    """Показывает GUI для настройки."""
+    global SELLER_ID
+    import config
+    
+    root = tk.Tk()
+    root.withdraw() # Скрываем главное окно
+    
+    # Запрос ID продавца
+    new_seller_id = simpledialog.askstring(
+        "Настройка клиента принтера", 
+        "Введите ваш ID продавца (можно узнать в боте по команде /start):", 
+        initialvalue=config.SELLER_ID
+    )
+    if not new_seller_id:
+        return
+        
+    # Запрос имени принтера
+    new_printer_name = simpledialog.askstring(
+        "Настройка клиента принтера", 
+        "Введите имя принтера Windows:\n(оставьте как есть, если не знаете)", 
+        initialvalue=config.PRINTER_NAME_WIN
+    )
+    if not new_printer_name:
+        return
+        
+    # Сохраняем в .env
+    env_path = Path(".") / ".env"
+    env_path.touch(exist_ok=True)
+    
+    set_key(env_path, "SELLER_ID", new_seller_id)
+    set_key(env_path, "PRINTER_NAME_WIN", new_printer_name)
+    
+    # Обновляем переменные в памяти для текущего запуска
+    config.SELLER_ID = new_seller_id
+    config.PRINTER_NAME_WIN = new_printer_name
+    
+    messagebox.showinfo("Настройки сохранены", "Настройки обновлены! Пожалуйста, перезапустите приложение.")
+    
+    # Если изменяем настройки "на лету", лучше выйти для чистого рестарта
+    os._exit(0)
+
+def on_quit(icon, item):
+    """Выход из приложения."""
+    logger.info("Завершение работы через трей...")
+    icon.stop()
+    os._exit(0)
+
+def on_change_settings(icon, item):
+    """Изменение настроек через трей."""
+    # Запускаем в отдельном потоке чтобы не блокировать трей
+    threading.Thread(target=show_settings_gui, daemon=True).start()
+
+def setup_tray():
+    """Настройка и запуск иконки в трее."""
+    global tray_icon
+    icon_image = create_image()
+    menu = (
+        item('Настройки', on_change_settings),
+        item('Выход', on_quit),
+    )
+    tray_icon = pystray.Icon("printer_client", icon_image, f"{SHOP_NAME}: Инициализация...", menu)
+    
+    # Показываем уведомление при запуске
+    tray_icon.run(setup=lambda icon: icon.notify("Приложение запущено и работает в фоне", SHOP_NAME))
+
 def main():
     """Точка входа."""
+    import config
+    
+    # Проверка настроек при старте
+    if not config.SELLER_ID:
+        # Если ID продавца нет, показываем диалог настройки
+        show_settings_gui()
+        # Если после диалога ID всё ещё нет (отменили), выходим
+        if not config.SELLER_ID:
+            sys.exit(0)
+
     try:
-        asyncio.run(run_client())
+        # Запускаем WebSocket клиент в отдельном потоке
+        # Передаем обновленный seller_id
+        client_thread = threading.Thread(target=lambda: asyncio.run(run_client(config.SELLER_ID)), daemon=True)
+        client_thread.start()
+        
+        # Запускаем иконку в трее (основной поток)
+        setup_tray()
     except KeyboardInterrupt:
         logger.info("\n👋 Клиент остановлен пользователем (Ctrl+C)")
         sys.exit(0)
 
-
 if __name__ == "__main__":
+    import os
     main()

@@ -99,30 +99,46 @@ class PrinterConnectionManager:
             False — если нет подключенных принтеров или дубль
         """
         order_id = order_data.get("order_id", "")
+        seller_id = order_data.get("seller_id", None)
 
         # Проверка на дубликат
         if await self.is_duplicate(order_id):
             logger.warning(f"Дубликат чека {order_id} — пропущен")
             return False
 
-        # Попытка отправить на принтер
-        disconnected = []
-        for client_id, ws in self.active_connections.items():
+        # Попытка отправить на конкретный принтер (по seller_id)
+        if seller_id and str(seller_id) in self.active_connections:
+            ws = self.active_connections[str(seller_id)]
             try:
                 await ws.send_json(order_data)
                 await self._mark_as_printed(order_id)
-                logger.info(f"✅ Чек {order_id} отправлен на принтер {client_id[:8]}...")
+                logger.info(f"✅ Чек {order_id} отправлен на принтер продавца {seller_id}")
                 return True
             except Exception as e:
-                logger.error(f"Ошибка отправки на принтер {client_id[:8]}...: {e}")
-                disconnected.append(client_id)
+                logger.error(f"Ошибка отправки на принтер продавца {seller_id}: {e}")
+                self.disconnect(str(seller_id))
+        elif seller_id:
+            logger.warning(f"Принтер продавца {seller_id} не подключен. Чек {order_id} добавлен в очередь.")
+        else:
+            # Fallback (для старых клиентов без seller_id)
+            disconnected = []
+            for client_id, ws in self.active_connections.items():
+                try:
+                    await ws.send_json(order_data)
+                    await self._mark_as_printed(order_id)
+                    logger.info(f"✅ Чек {order_id} отправлен на общий принтер {client_id[:8]}...")
+                    return True
+                except Exception as e:
+                    logger.error(f"Ошибка отправки на общий принтер {client_id[:8]}...: {e}")
+                    disconnected.append(client_id)
 
-        # Очистка отключенных
-        for client_id in disconnected:
-            self.disconnect(client_id)
+            # Очистка отключенных
+            for client_id in disconnected:
+                self.disconnect(client_id)
+            
+            logger.warning(f"Нет общих подключенных принтеров. Чек {order_id} добавлен в очередь.")
 
-        # Нет подключенных принтеров — добавляем в очередь
-        logger.warning(f"Нет подключенных принтеров. Чек {order_id} добавлен в очередь.")
+        # Добавляем в очередь, если не удалось напечатать
         await self._add_to_pending(order_data)
         return False
 

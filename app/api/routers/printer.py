@@ -34,7 +34,7 @@ async def printer_status(secret_token: str | None = None):
 
 
 @router.websocket("/ws/printer/{secret_token}")
-async def printer_websocket(websocket: WebSocket, secret_token: str):
+async def printer_websocket(websocket: WebSocket, secret_token: str, seller_id: str | None = None):
     """
     WebSocket-эндпоинт для подключения локального клиента принтера.
     
@@ -51,8 +51,8 @@ async def printer_websocket(websocket: WebSocket, secret_token: str):
     # Получаем менеджер из app.state
     manager = websocket.app.state.printer_manager
 
-    # Используем токен как client_id (можно расширить до уникальных ID)
-    client_id = secret_token
+    # Используем seller_id (от клиента), если есть, иначе общий токен
+    client_id = seller_id if seller_id else secret_token
     await manager.connect(websocket, client_id)
 
     try:
