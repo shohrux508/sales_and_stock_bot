@@ -6,6 +6,7 @@ from app.services.user_service import UserService
 from app.services.product_service import ProductService
 from app.services.transaction_service import TransactionService
 from app.services.category_service import CategoryService
+from app.services.log_analyzer import LogAnalyzerService
 from app.database.core import async_session_maker
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,7 @@ class App:
     def __init__(self):
         self.container = Container()
         self.printer_manager = None
+        self.log_analyzer = None
 
     def setup_services(self):
         logger.info("Setting up services...")
@@ -27,6 +29,11 @@ class App:
         self.printer_manager = PrinterConnectionManager()
         self.container.register("printer_manager", self.printer_manager)
         logger.info("PrinterConnectionManager зарегистрирован в DI-контейнере")
+
+        # Регистрация Log Analyzer
+        self.log_analyzer = LogAnalyzerService()
+        self.container.register("log_analyzer", self.log_analyzer)
+        logger.info("LogAnalyzerService зарегистрирован в DI-контейнере")
 
     async def init_printer_redis(self):
         """Инициализация Redis для дедупликации чеков."""
@@ -58,6 +65,26 @@ class App:
             return start_api(self.container, bot, dp, self.printer_manager)
         return None
 
+    async def setup_log_analyzer(self):
+        """Запуск фоновой задачи Log Analyzer (ежедневный отчёт)."""
+        if not settings.TECH_ADMIN_ID:
+            logger.warning("TECH_ADMIN_ID не задан — Log Analyzer отключён")
+            return None
+        if not self.log_analyzer:
+            return None
+
+        bot = getattr(self, "bot", None)
+        if not bot:
+            logger.warning("Bot не инициализирован — Log Analyzer отключён")
+            return None
+
+        logger.info(f"Log Analyzer: отчёт будет отправляться в {settings.LOG_REPORT_TIME} → {settings.TECH_ADMIN_ID}")
+        return self.log_analyzer.scheduler_loop(
+            bot=bot,
+            chat_id=settings.TECH_ADMIN_ID,
+            report_time=settings.LOG_REPORT_TIME,
+        )
+
     async def run(self):
         self.setup_services()
         
@@ -73,6 +100,10 @@ class App:
         api_task = await self.setup_api()
         if api_task:
             tasks.append(api_task)
+
+        log_analyzer_task = await self.setup_log_analyzer()
+        if log_analyzer_task:
+            tasks.append(log_analyzer_task)
 
         if not tasks:
             logger.warning("No components enabled to run (RUN_TELEGRAM=False, RUN_API=False)")

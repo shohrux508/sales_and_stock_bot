@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     PRINTER_SECRET_TOKEN: str = "change-me-to-secure-token"
     WEBHOOK_URL: str = ""
     WEBHOOK_PATH: str = "/webhook"
+    TECH_ADMIN_ID: int = 0
+    LOG_REPORT_TIME: str = "23:55"
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 settings = Settings()
