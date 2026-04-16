@@ -11,9 +11,7 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 # Filter: only TECH_ADMIN_ID can use this router
-@router.message.filter()
-async def tech_admin_filter(message: types.Message):
-    return message.from_user.id == settings.TECH_ADMIN_ID
+router.message.filter(lambda message: message.from_user.id == settings.TECH_ADMIN_ID)
 
 @router.message(F.text.regexp(r"^/tech_report:(\d+)$"))
 async def cmd_tech_report_forced(message: types.Message, container: Container):
