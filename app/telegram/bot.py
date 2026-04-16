@@ -3,7 +3,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.fsm.storage.memory import MemoryStorage
 from app.config import settings
 from app.container import Container
-from app.telegram.routers import admin, worker
+from app.telegram.routers import admin, worker, tech
 
 def create_bot_and_dp(container: Container):
     bot = Bot(token=settings.BOT_TOKEN)
@@ -26,6 +26,7 @@ def create_bot_and_dp(container: Container):
     # Include routers
     dp.include_router(admin.router)
     dp.include_router(worker.router)
+    dp.include_router(tech.router)
     
     return bot, dp
 

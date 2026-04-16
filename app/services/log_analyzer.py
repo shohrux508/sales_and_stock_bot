@@ -88,18 +88,25 @@ class LogAnalyzerService:
     # ── Публичные методы ──────────────────────────────────────────
 
     def analyze_today(self) -> LogStats:
+        """Анализирует лог-файл за текущие сутки (UZT +5)."""
+        return self.analyze(days=1)
+
+    def analyze(self, days: int = 1) -> LogStats:
         """
-        Анализирует лог-файл за текущие сутки (UZT +5).
+        Анализирует лог-файл за указанное количество дней (UZT +5).
         
-        Возвращает агрегированную статистику.
+        Ограничено 10 днями для производительности.
         """
+        # Ограничиваем период до 10 дней
+        days = max(1, min(days, 10))
+        
         stats = LogStats()
 
         if not self.log_path.exists():
             logger.warning(f"Лог-файл не найден: {self.log_path}")
             return stats
 
-        today_start = self._get_today_start()
+        start_time = self._get_start_time(days)
 
         for line in self._read_lines_reverse(self.log_path):
             line = line.strip()
@@ -113,8 +120,8 @@ class LogAnalyzerService:
 
             log_dt, level, message = parsed
 
-            # Остановка: вышли за пределы текущих суток
-            if log_dt < today_start:
+            # Остановка: вышли за пределы периода
+            if log_dt < start_time:
                 break
 
             stats.total_lines += 1
@@ -133,16 +140,24 @@ class LogAnalyzerService:
 
         return stats
 
-    def format_report(self, stats: LogStats, report_date: datetime | None = None) -> str:
+    def format_report(self, stats: LogStats, days: int = 1, report_date: datetime | None = None) -> str:
         """Форматирует статистику в Telegram-сообщение."""
         if report_date is None:
             report_date = datetime.now(UZT)
 
-        date_str = report_date.strftime("%d.%m.%Y")
+        days = max(1, min(days, 10))
+        
+        if days == 1:
+            date_info = report_date.strftime("%d.%m.%Y")
+        else:
+            start_date = (report_date - timedelta(days=days - 1)).strftime("%d.%m")
+            end_date = report_date.strftime("%d.%m.%Y")
+            date_info = f"{start_date} - {end_date}"
+
         time_str = report_date.strftime("%H:%M")
 
         lines = [
-            f"📊 <b>Дежурный отчёт за {date_str}</b>",
+            f"📊 <b>Дежурный отчёт за {date_info}</b>",
             "",
             "🖨️ <b>Принтер</b>",
             f"  ✅ Чеки напечатаны: <b>{stats.prints_success}</b>",
@@ -170,7 +185,7 @@ class LogAnalyzerService:
             f"  ❌ Redis ошибки: <b>{stats.redis_errors}</b>",
             "",
             "📈 <b>Общее</b>",
-            f"  ℹ️ Строк за день: <b>{stats.total_lines}</b>",
+            f"  ℹ️ Строк за период: <b>{stats.total_lines}</b>",
             f"  ⚠️ Warnings: <b>{stats.total_warnings}</b>",
             f"  ❌ Errors: <b>{stats.total_errors}</b>",
         ])
@@ -189,17 +204,17 @@ class LogAnalyzerService:
 
         return "\n".join(lines)
 
-    async def send_report(self, bot, chat_id: int) -> bool:
+    async def send_report(self, bot, chat_id: int, days: int = 1) -> bool:
         """Анализирует логи и отправляет отчёт в Telegram."""
         try:
-            stats = self.analyze_today()
-            report = self.format_report(stats)
+            stats = self.analyze(days=days)
+            report = self.format_report(stats, days=days)
             await bot.send_message(
                 chat_id=chat_id,
                 text=report,
                 parse_mode="HTML",
             )
-            logger.info(f"📊 Дежурный отчёт отправлен (chat_id={chat_id})")
+            logger.info(f"📊 Дежурный отчёт отправлен (days={days}, chat_id={chat_id})")
             return True
         except Exception as e:
             logger.error(f"Ошибка отправки дежурного отчёта: {e}")
@@ -246,10 +261,11 @@ class LogAnalyzerService:
     # ── Приватные методы ──────────────────────────────────────────
 
     @staticmethod
-    def _get_today_start() -> datetime:
-        """Возвращает начало текущих суток в UZT (+5) как aware datetime."""
+    def _get_start_time(days: int) -> datetime:
+        """Возвращает начало периода в UZT (+5) как aware datetime."""
         now = datetime.now(UZT)
-        return now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Начало суток 'days-1' назад
+        return (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
     @staticmethod
     def _parse_log_line(line: str) -> tuple[datetime, str, str] | None:
