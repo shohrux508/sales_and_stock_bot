@@ -1,3 +1,4 @@
+import logging
 import uvicorn
 from fastapi import FastAPI
 from app.config import settings
@@ -7,27 +8,31 @@ from app.api.printer_manager import PrinterConnectionManager
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
+logger = logging.getLogger(__name__)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
     bot = app.state.bot
     dp = app.state.dp
     if bot and dp and settings.WEBHOOK_URL:
-        import logging
-        log = logging.getLogger("webhook")
-        webhook_url = f"{settings.WEBHOOK_URL.rstrip('/')}{settings.WEBHOOK_PATH}"
-        log.info(f"Setting webhook to {webhook_url}")
-        await bot.set_webhook(webhook_url, drop_pending_updates=True)
+        try:
+            webhook_url = f"{settings.WEBHOOK_URL.rstrip('/')}{settings.WEBHOOK_PATH}"
+            logger.info(f"Setting webhook to {webhook_url}")
+            await bot.set_webhook(webhook_url, drop_pending_updates=True)
+        except Exception as e:
+            logger.exception("Failed to set webhook")
     
     yield
     
     # Shutdown logic
     if bot:
-        import logging
-        log = logging.getLogger("webhook")
-        log.info("Deleting webhook and closing bot session")
-        await bot.delete_webhook()
-        await bot.session.close()
+        try:
+            logger.info("Deleting webhook and closing bot session")
+            await bot.delete_webhook()
+            await bot.session.close()
+        except Exception as e:
+            logger.exception("Error during bot shutdown")
 
 def create_app(container: Container, bot=None, dp=None, printer_manager: PrinterConnectionManager = None) -> FastAPI:
     app = FastAPI(lifespan=lifespan)
