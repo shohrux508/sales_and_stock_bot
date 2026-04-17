@@ -47,12 +47,30 @@ class ProductService:
     async def create_product(self, name: str, price: float, quantity: int, category_id: int | None = None) -> Product:
         try:
             async with self.session_maker() as session:
-                product = Product(name=name, price=price, quantity=quantity, category_id=category_id)
-                session.add(product)
-                await session.commit()
-                await session.refresh(product)
-                return product
-        except SQLAlchemyError as e:
+                stmt = select(Product).where(Product.name == name)
+                result = await session.execute(stmt)
+                existing_product = result.scalar_one_or_none()
+
+                if existing_product:
+                    if existing_product.is_active == 1:
+                        # Product exists and is active, let it raise or handle
+                        raise ValueError(f"Product with name '{name}' already exists.")
+                    else:
+                        # Reactivate soft-deleted product
+                        existing_product.is_active = 1
+                        existing_product.price = price
+                        existing_product.quantity = quantity
+                        existing_product.category_id = category_id
+                        await session.commit()
+                        await session.refresh(existing_product)
+                        return existing_product
+                else:
+                    product = Product(name=name, price=price, quantity=quantity, category_id=category_id)
+                    session.add(product)
+                    await session.commit()
+                    await session.refresh(product)
+                    return product
+        except Exception as e:
             logger.exception(f"DB error in create_product({name})")
             raise
 
