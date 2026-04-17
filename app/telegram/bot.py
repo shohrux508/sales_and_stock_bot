@@ -21,6 +21,7 @@ def create_bot_and_dp(container: Container):
 
     # Setup middlewares
     from app.telegram.middlewares.auth import AuthMiddleware
+
     auth_middleware = AuthMiddleware()
     dp.message.outer_middleware(auth_middleware)
     dp.callback_query.outer_middleware(auth_middleware)
@@ -31,6 +32,7 @@ def create_bot_and_dp(container: Container):
     dp.include_router(tech.router)
 
     return bot, dp
+
 
 async def start_telegram_polling(bot: Bot, dp: Dispatcher):
     try:

@@ -28,6 +28,7 @@ router = Router()
 router.message.filter(lambda event, db_user=None: db_user is not None)
 router.callback_query.filter(lambda event, db_user=None: db_user is not None)
 
+
 @router.message(F.text == "/start")
 async def worker_start(message: types.Message, db_user: User):
     try:
@@ -40,10 +41,12 @@ async def worker_start(message: types.Message, db_user: User):
         logger.exception("Error in worker_start")
         await message.answer("⚠️ Xatolik yuz berdi.")
 
+
 @router.message(F.text == "Bekor qilish")
 async def cancel_handler(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("Amal bekor qilindi.", reply_markup=main_worker_kb())
+
 
 @router.callback_query(F.data == "cancel_sale")
 async def cancel_sale_cb(call: types.CallbackQuery, state: FSMContext):
@@ -54,6 +57,7 @@ async def cancel_sale_cb(call: types.CallbackQuery, state: FSMContext):
     except Exception:
         await call.message.delete()
         await call.message.answer("❌ Sotuvni rasmiylashtirish bekor qilindi.", reply_markup=main_worker_kb())
+
 
 # --- Quick New Sale (from inline button after checkout) ---
 @router.callback_query(F.data == "quick_new_sale")
@@ -68,13 +72,16 @@ async def quick_new_sale(call: types.CallbackQuery, state: FSMContext, container
             return
 
         await state.set_state(SellState.category_id)
-        await call.message.edit_text("Sotish uchun mahsulotni tanlang:\nKategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
+        await call.message.edit_text(
+            "Sotish uchun mahsulotni tanlang:\nKategoriyani tanlang:", reply_markup=worker_categories_kb(categories)
+        )
     except Exception:
         logger.exception("Error in quick_new_sale")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
+
 # --- Sell Logic ---
-@router.message(F.text.regexp(r'^\d{8,14}$'))
+@router.message(F.text.regexp(r"^\d{8,14}$"))
 async def process_scanned_barcode(message: types.Message, state: FSMContext, container: Container):
     try:
         barcode = message.text.strip()
@@ -86,20 +93,25 @@ async def process_scanned_barcode(message: types.Message, state: FSMContext, con
             return
 
         if product.quantity == 0:
-            await message.answer(f"Mahsulot <b>{product.name}</b> topildi, ammo u omborda qolmagan (0 dona).", parse_mode="HTML")
+            await message.answer(
+                f"Mahsulot <b>{product.name}</b> topildi, ammo u omborda qolmagan (0 dona).", parse_mode="HTML"
+            )
             return
 
-        await state.update_data(product_id=product.id, max_qty=product.quantity, product_name=product.name, price=float(product.price))
+        await state.update_data(
+            product_id=product.id, max_qty=product.quantity, product_name=product.name, price=float(product.price)
+        )
         # Отправляем inline-кнопку отмены вместо ReplyKeyboard
         await message.answer(
             f"🔍 Mahsulot topildi: <b>{product.name}</b>\nOmborda: <b>{product.quantity}</b> dona.\n\nSotish miqdorini kiriting:",
             parse_mode="HTML",
-            reply_markup=cancel_inline_kb()
+            reply_markup=cancel_inline_kb(),
         )
         await state.set_state(SellState.amount)
     except Exception:
         logger.exception("Error in process_scanned_barcode")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
+
 
 @router.message(F.text == "🛒 Sotuvni rasmiylashtirish")
 async def start_sell(message: types.Message, container: Container, state: FSMContext):
@@ -117,6 +129,7 @@ async def start_sell(message: types.Message, container: Container, state: FSMCon
         logger.exception("Error in start_sell")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
+
 @router.callback_query(SellState.category_id, F.data.startswith("w_cat_"))
 async def process_sell_cat(call: types.CallbackQuery, state: FSMContext, container: Container):
     try:
@@ -133,10 +146,14 @@ async def process_sell_cat(call: types.CallbackQuery, state: FSMContext, contain
             return
 
         await state.set_state(SellState.product_id)
-        await call.message.edit_text("Sotish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(available_products, category_id=cat_id))
+        await call.message.edit_text(
+            "Sotish uchun mahsulotni tanlang:",
+            reply_markup=sell_product_list_kb(available_products, category_id=cat_id),
+        )
     except Exception:
         logger.exception("Error in process_sell_cat")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
 
 @router.callback_query(F.data.startswith("sell_page_"))
 async def cb_sell_page(call: types.CallbackQuery, container: Container):
@@ -148,16 +165,21 @@ async def cb_sell_page(call: types.CallbackQuery, container: Container):
         product_service: ProductService = container.get("product_service")
         products = await product_service.get_products_by_category(cat_id)
 
-        await call.message.edit_text("Sotish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(products, category_id=cat_id, page=page))
+        await call.message.edit_text(
+            "Sotish uchun mahsulotni tanlang:",
+            reply_markup=sell_product_list_kb(products, category_id=cat_id, page=page),
+        )
     except Exception:
         logger.exception("Error in cb_sell_page")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
 
 @router.callback_query(F.data == "back_to_w_cats")
 async def process_back_to_w_cats(call: types.CallbackQuery, state: FSMContext, container: Container):
     try:
         from app.services.category_service import CategoryService
         from app.telegram.keyboards.worker import worker_categories_kb
+
         category_service: CategoryService = container.get("category_service")
         categories = await category_service.get_all_categories()
         await state.set_state(SellState.category_id)
@@ -165,6 +187,7 @@ async def process_back_to_w_cats(call: types.CallbackQuery, state: FSMContext, c
     except Exception:
         logger.exception("Error in process_back_to_w_cats")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
 
 @router.callback_query(F.data.startswith("w_cat_page_"))
 async def cb_worker_cat_page(call: types.CallbackQuery, container: Container):
@@ -195,18 +218,20 @@ async def process_sell_product(call: types.CallbackQuery, state: FSMContext, con
                 await call.message.edit_reply_markup(reply_markup=sell_product_list_kb(products, category_id=cat_id))
             return
 
-
-        await state.update_data(product_id=product_id, max_qty=product.quantity, product_name=product.name, price=float(product.price))
+        await state.update_data(
+            product_id=product_id, max_qty=product.quantity, product_name=product.name, price=float(product.price)
+        )
         # Редактируем текущее сообщение + inline-отмена (нижнее меню остается!)
         await call.message.edit_text(
             f"📦 Tanlangan mahsulot: <b>{product.name}</b>\nOmborda: <b>{product.quantity}</b> dona.\n\nSotish miqdorini kiriting:",
             parse_mode="HTML",
-            reply_markup=cancel_inline_kb()
+            reply_markup=cancel_inline_kb(),
         )
         await state.set_state(SellState.amount)
     except Exception:
         logger.exception("Error in process_sell_product")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
 
 @router.message(SellState.amount)
 async def process_sell_amount(message: types.Message, state: FSMContext, container: Container, db_user: User):
@@ -220,26 +245,30 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
             return
 
         data = await state.get_data()
-        max_qty = data['max_qty']
+        max_qty = data["max_qty"]
 
-        cart = data.get('cart', [])
-        already_in_cart = sum(item['amount'] for item in cart if item['product_id'] == data['product_id'])
+        cart = data.get("cart", [])
+        already_in_cart = sum(item["amount"] for item in cart if item["product_id"] == data["product_id"])
 
         if amount + already_in_cart > max_qty:
-            await message.answer(f"Xatolik! Omborda jami {max_qty} dona bor. Savatda esa {already_in_cart} dona. Miqdorni qayta kiriting:")
+            await message.answer(
+                f"Xatolik! Omborda jami {max_qty} dona bor. Savatda esa {already_in_cart} dona. Miqdorni qayta kiriting:"
+            )
             return
 
-        cart.append({
-            'product_id': data['product_id'],
-            'product_name': data['product_name'],
-            'price': data.get('price', 0),
-            'amount': amount
-        })
+        cart.append(
+            {
+                "product_id": data["product_id"],
+                "product_name": data["product_name"],
+                "price": data.get("price", 0),
+                "amount": amount,
+            }
+        )
         await state.update_data(cart=cart)
 
         # Показываем содержимое корзины
         cart_text = "\n".join([f"• <b>{item['product_name']}</b> <i>({item['amount']} dona)</i>" for item in cart])
-        total_sum = sum(item['price'] * item['amount'] for item in cart)
+        total_sum = sum(item["price"] * item["amount"] for item in cart)
 
         msg = (
             f"✅ <b>Mahsulot savatga qo'shildi.</b>\n\n"
@@ -249,21 +278,19 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
             f"Keyingi amalni tanlang?"
         )
 
-        await message.answer(
-            msg,
-            parse_mode="HTML",
-            reply_markup=cart_decision_kb()
-        )
+        await message.answer(msg, parse_mode="HTML", reply_markup=cart_decision_kb())
         await state.set_state(SellState.checkout_decision)
     except Exception:
         logger.exception("Error in process_sell_amount")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
+
 
 @router.callback_query(SellState.checkout_decision, F.data == "cart_add_more")
 async def cart_add_more(call: types.CallbackQuery, state: FSMContext, container: Container):
     try:
         from app.services.category_service import CategoryService
         from app.telegram.keyboards.worker import worker_categories_kb
+
         category_service: CategoryService = container.get("category_service")
         categories = await category_service.get_all_categories()
         await state.set_state(SellState.category_id)
@@ -272,24 +299,24 @@ async def cart_add_more(call: types.CallbackQuery, state: FSMContext, container:
         logger.exception("Error in cart_add_more")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
+
 @router.callback_query(SellState.checkout_decision, F.data == "cart_checkout")
 async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container: Container, db_user: User):
     try:
         data = await state.get_data()
-        cart = data.get('cart', [])
+        cart = data.get("cart", [])
         if not cart:
             await call.answer("Savat bo'sh!", show_alert=True)
             return
 
         import uuid
+
         order_group_id = str(uuid.uuid4())
 
         transaction_service: TransactionService = container.get("transaction_service")
 
         transactions = await transaction_service.create_bulk_sale(
-            user_id=db_user.id,
-            items=cart,
-            order_group_id=order_group_id
+            user_id=db_user.id, items=cart, order_group_id=order_group_id
         )
 
         if not transactions:
@@ -300,8 +327,12 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
         total_rub = sum(tx.total_price for tx in transactions)
         total_qty = sum(tx.amount for tx in transactions)
 
-        items_text_worker = "\n".join([f"• <b>{tx.product.name}</b> <i>({tx.amount} dona)</i> — {tx.total_price:,} so'm" for tx in transactions])
-        items_text_admin = "\n".join([f"• <b>{tx.product.name}</b> <i>({tx.amount} dona)</i> — {tx.total_price:,} so'm" for tx in transactions])
+        items_text_worker = "\n".join(
+            [f"• <b>{tx.product.name}</b> <i>({tx.amount} dona)</i> — {tx.total_price:,} so'm" for tx in transactions]
+        )
+        items_text_admin = "\n".join(
+            [f"• <b>{tx.product.name}</b> <i>({tx.amount} dona)</i> — {tx.total_price:,} so'm" for tx in transactions]
+        )
 
         # Редактируем сообщение с чеком + кнопка "Новая продажа"
         msg_checkout = (
@@ -310,16 +341,13 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
             f"<blockquote>{items_text_worker}</blockquote>\n"
             f"💰 <b>Jami:</b> {total_rub:,} so'm"
         )
-        await call.message.edit_text(
-            msg_checkout,
-            parse_mode="HTML",
-            reply_markup=after_checkout_kb()
-        )
+        await call.message.edit_text(msg_checkout, parse_mode="HTML", reply_markup=after_checkout_kb())
 
         # --- TRIGGER PRINT ---
         worker_name = call.from_user.full_name or call.from_user.username or str(db_user.tg_id)
 
         from datetime import datetime
+
         print_data = {
             "order_id": order_group_id,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -330,14 +358,16 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
                     "name": tx.product.name,
                     "quantity": tx.amount,
                     "price": float(tx.product.price),
-                    "sum": float(tx.total_price)
-                } for tx in transactions
+                    "sum": float(tx.total_price),
+                }
+                for tx in transactions
             ],
             "total_amount": float(total_rub),
-            "currency": "UZS"
+            "currency": "UZS",
         }
 
         from app.api.printer_manager import PrinterConnectionManager
+
         printer_manager: PrinterConnectionManager = container.get("printer_manager")
         print_sent = await printer_manager.send_print_job(print_data)
 
@@ -369,6 +399,7 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
 
         try:
             from app.telegram.keyboards.admin import undo_and_print_kb
+
             admin_ids = [int(x.strip()) for x in settings.ADMIN_IDS.split(",") if x.strip().isdigit()]
             for admin_id in admin_ids:
                 try:
@@ -388,6 +419,7 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
         except Exception:
             pass
         await state.clear()
+
 
 # --- Worker Stats ---
 @router.message(F.text == "📈 Mening savdo ko'rsatkichlarim")

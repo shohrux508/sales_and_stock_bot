@@ -10,9 +10,15 @@ def main_admin_kb() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="📦 Ombor"), KeyboardButton(text="🗂 Kategoriyalar")],
         [KeyboardButton(text="📥 Qabul qilish"), KeyboardButton(text="🗑 Hisobdan chiqarish")],
         [KeyboardButton(text="👥 Xodimlar"), KeyboardButton(text="📊 Statistika")],
-        [KeyboardButton(text="🌐 Web Dashboard", web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/?u=admin&p={settings.DASHBOARD_PASSWORD}"))]
+        [
+            KeyboardButton(
+                text="🌐 Web Dashboard",
+                web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/?u=admin&p={settings.DASHBOARD_PASSWORD}"),
+            )
+        ],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 
 def categories_list_kb(categories, for_selection=False, page: int = 0, page_size: int = 20) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
@@ -31,10 +37,10 @@ def categories_list_kb(categories, for_selection=False, page: int = 0, page_size
     nav_btns = []
     if page > 0:
         suffix = "_sel" if for_selection else ""
-        nav_btns.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"cat_page{suffix}_{page-1}"))
+        nav_btns.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"cat_page{suffix}_{page - 1}"))
     if end < len(categories):
         suffix = "_sel" if for_selection else ""
-        nav_btns.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"cat_page{suffix}_{page+1}"))
+        nav_btns.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"cat_page{suffix}_{page + 1}"))
 
     if nav_btns:
         builder.row(*nav_btns)
@@ -45,7 +51,6 @@ def categories_list_kb(categories, for_selection=False, page: int = 0, page_size
     return builder.as_markup()
 
 
-
 def category_manage_kb(category_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="✏️ Nomini o'zgartirish", callback_data=f"cat_rename_{category_id}")
@@ -54,12 +59,14 @@ def category_manage_kb(category_id: int) -> InlineKeyboardMarkup:
     builder.adjust(1)
     return builder.as_markup()
 
+
 def category_delete_confirm_kb(category_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Ha, o'chirish", callback_data=f"cat_del_yes_{category_id}")
     builder.button(text="❌ Yo'q", callback_data=f"manage_cat_{category_id}")
     builder.adjust(1)
     return builder.as_markup()
+
 
 def products_list_kb(products, page: int = 0, page_size: int = 20) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
@@ -69,19 +76,16 @@ def products_list_kb(products, page: int = 0, page_size: int = 20) -> InlineKeyb
     page_items = products[start:end]
 
     for product in page_items:
-        builder.button(
-            text=f"{product.name} ({product.quantity} ta)",
-            callback_data=f"prod_edit_{product.id}"
-        )
+        builder.button(text=f"{product.name} ({product.quantity} ta)", callback_data=f"prod_edit_{product.id}")
 
     builder.adjust(2)
 
     # Navigation buttons
     nav_btns = []
     if page > 0:
-        nav_btns.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"stock_page_{page-1}"))
+        nav_btns.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"stock_page_{page - 1}"))
     if end < len(products):
-        nav_btns.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"stock_page_{page+1}"))
+        nav_btns.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"stock_page_{page + 1}"))
 
     if nav_btns:
         builder.row(*nav_btns)
@@ -101,6 +105,7 @@ def product_edit_kb(product_id: int) -> InlineKeyboardMarkup:
     builder.adjust(2, 1, 1, 1)
     return builder.as_markup()
 
+
 def product_delete_confirm_kb(product_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Ha, o'chirish", callback_data=f"prod_del_yes_{product_id}")
@@ -108,15 +113,18 @@ def product_delete_confirm_kb(product_id: int) -> InlineKeyboardMarkup:
     builder.adjust(1)
     return builder.as_markup()
 
+
 def cancel_admin_inline_kb() -> InlineKeyboardMarkup:
     """Inline-кнопка отмены для админа (не заменяет нижнюю клавиатуру)."""
     builder = InlineKeyboardBuilder()
     builder.button(text="❌ Bekor qilish", callback_data="admin_cancel")
     return builder.as_markup()
 
+
 # Обратная совместимость — старое имя указывает на inline-версию
 def cancel_kb() -> InlineKeyboardMarkup:
     return cancel_admin_inline_kb()
+
 
 def stats_periods_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
@@ -129,6 +137,7 @@ def stats_periods_kb() -> InlineKeyboardMarkup:
     builder.adjust(2, 1, 2, 1)
     return builder.as_markup()
 
+
 def approve_user_kb(tg_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Tasdiqlash", callback_data=f"approve_{tg_id}")
@@ -136,10 +145,12 @@ def approve_user_kb(tg_id: int) -> InlineKeyboardMarkup:
     builder.adjust(2)
     return builder.as_markup()
 
+
 def undo_tx_kb(tx_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="❌ Bekor qilish", callback_data=f"undo_tx_{tx_id}")
     return builder.as_markup()
+
 
 def undo_and_print_kb(tx_id: int, order_id: str) -> InlineKeyboardMarkup:
     """Кнопки отмены транзакции и печати чека (для уведомления админу)."""
@@ -149,11 +160,13 @@ def undo_and_print_kb(tx_id: int, order_id: str) -> InlineKeyboardMarkup:
     builder.adjust(1)
     return builder.as_markup()
 
+
 def print_retry_kb(order_id: str) -> InlineKeyboardMarkup:
     """Кнопка повторной печати чека (когда принтер не был подключен)."""
     builder = InlineKeyboardBuilder()
     builder.button(text="🖨️ Chekni chop etish", callback_data=f"print_receipt_{order_id}")
     return builder.as_markup()
+
 
 def staff_list_kb(workers, page: int = 0, page_size: int = 20) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
@@ -177,9 +190,9 @@ def staff_list_kb(workers, page: int = 0, page_size: int = 20) -> InlineKeyboard
     # Navigation buttons
     nav_btns = []
     if page > 0:
-        nav_btns.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"staff_page_{page-1}"))
+        nav_btns.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"staff_page_{page - 1}"))
     if end < len(workers):
-        nav_btns.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"staff_page_{page+1}"))
+        nav_btns.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"staff_page_{page + 1}"))
 
     if nav_btns:
         builder.row(*nav_btns)

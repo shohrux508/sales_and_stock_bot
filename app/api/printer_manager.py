@@ -30,6 +30,7 @@ class PrinterConnectionManager:
         """Инициализация Redis-соединения для дедупликации."""
         try:
             import redis.asyncio as aioredis
+
             self._redis = aioredis.from_url(redis_url, decode_responses=True)
             await self._redis.ping()
             self._redis_available = True
@@ -42,15 +43,15 @@ class PrinterConnectionManager:
         """Регистрирует новое WebSocket-соединение принтера."""
         await websocket.accept()
         self.active_connections[client_id] = websocket
-        logger.info(f"🖨️ Принтер подключен (ID: {client_id[:8]}...). "
-                     f"Всего подключений: {len(self.active_connections)}")
+        logger.info(f"🖨️ Принтер подключен (ID: {client_id[:8]}...). Всего подключений: {len(self.active_connections)}")
 
     def disconnect(self, client_id: str) -> None:
         """Удаляет соединение из менеджера."""
         if client_id in self.active_connections:
             del self.active_connections[client_id]
-            logger.info(f"🖨️ Принтер отключен (ID: {client_id[:8]}...). "
-                         f"Всего подключений: {len(self.active_connections)}")
+            logger.info(
+                f"🖨️ Принтер отключен (ID: {client_id[:8]}...). Всего подключений: {len(self.active_connections)}"
+            )
 
     @property
     def has_connected_printer(self) -> bool:
@@ -146,7 +147,7 @@ class PrinterConnectionManager:
             await self._redis.rpush(self._pending_key, json.dumps(order_data))
             await self._redis.ltrim(self._pending_key, -self._max_pending, -1)
             # Set TTL for the whole queue just in case
-            await self._redis.expire(self._pending_key, 604800) # 1 week
+            await self._redis.expire(self._pending_key, 604800)  # 1 week
         except Exception as e:
             logger.error(f"Redis error adding to pending: {e}")
 

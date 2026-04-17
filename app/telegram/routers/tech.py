@@ -14,6 +14,7 @@ router = Router()
 # Filter: only TECH_ADMIN_ID can use this router
 router.message.filter(lambda message: message.from_user.id == settings.TECH_ADMIN_ID)
 
+
 @router.message(F.text.regexp(r"^/tech_report:(\d+)$"))
 async def cmd_tech_report_forced(message: types.Message, container: Container):
     """
@@ -30,11 +31,7 @@ async def cmd_tech_report_forced(message: types.Message, container: Container):
 
         status_msg = await message.answer(f"⏳ Формирую отчёт за {days} дн...")
 
-        success = await log_analyzer.send_report(
-            bot=message.bot,
-            chat_id=message.chat.id,
-            days=days
-        )
+        success = await log_analyzer.send_report(bot=message.bot, chat_id=message.chat.id, days=days)
 
         await status_msg.delete()
         if not success:
@@ -43,14 +40,14 @@ async def cmd_tech_report_forced(message: types.Message, container: Container):
         logger.exception("Error in cmd_tech_report_forced")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
+
 @router.message(Command("tech_report"))
 async def cmd_tech_report_help(message: types.Message):
     """Fallback help for tech_report command."""
     try:
         await message.answer(
-            "Использование: <code>/tech_report:число</code>\n"
-            "Например: <code>/tech_report:7</code> (макс. 10 дней)",
-            parse_mode="HTML"
+            "Использование: <code>/tech_report:число</code>\nНапример: <code>/tech_report:7</code> (макс. 10 дней)",
+            parse_mode="HTML",
         )
     except Exception:
         logger.exception("Error in cmd_tech_report_help")

@@ -26,11 +26,7 @@ async def printer_status(secret_token: str | None = None):
     """
     if secret_token and secret_token == settings.PRINTER_SECRET_TOKEN:
         # Detailed status for monitoring
-        return {
-            "status": "active",
-            "uptime_check": True,
-            "secret_verified": True
-        }
+        return {"status": "active", "uptime_check": True, "secret_verified": True}
     # Minimal response
     return {"status": "ok"}
 

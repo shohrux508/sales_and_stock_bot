@@ -9,6 +9,7 @@ class InterceptHandler(logging.Handler):
     Default handler from examples in loguru documentaion.
     See https://loguru.readthedocs.io/en/stable/overview.html#entirely-compatible-with-standard-logging
     """
+
     def emit(self, record):
         # Get corresponding Loguru level if it exists
         try:
@@ -24,6 +25,7 @@ class InterceptHandler(logging.Handler):
 
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
+
 def setup_logging():
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
@@ -33,14 +35,14 @@ def setup_logging():
             {
                 "sink": sys.stdout,
                 "level": "INFO",
-                "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+                "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
             },
             {
                 "sink": "logs/sales_bot.log",
                 "level": "INFO",
                 "rotation": "10 MB",
                 "retention": "1 week",
-                "format": "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
-            }
+                "format": "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+            },
         ]
     )

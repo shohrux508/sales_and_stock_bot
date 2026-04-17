@@ -9,6 +9,7 @@ from app.database.models import Category, Product
 
 logger = logging.getLogger(__name__)
 
+
 class CategoryService:
     def __init__(self, async_session_maker: async_sessionmaker):
         self.session_maker = async_session_maker

@@ -12,6 +12,7 @@ from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
+
 class App:
     def __init__(self):
         self.container = Container()
@@ -28,6 +29,7 @@ class App:
         # Регистрация менеджера принтеров
         try:
             from app.api.printer_manager import PrinterConnectionManager
+
             self.printer_manager = PrinterConnectionManager()
             self.container.register("printer_manager", self.printer_manager)
             logger.info("PrinterConnectionManager зарегистрирован в DI-контейнере")
@@ -54,6 +56,7 @@ class App:
         if settings.RUN_TELEGRAM:
             try:
                 from app.telegram.bot import create_bot_and_dp, start_telegram_polling
+
                 logger.info("Initializing Telegram Bot...")
                 bot, dp = create_bot_and_dp(self.container)
                 self.bot = bot
@@ -73,6 +76,7 @@ class App:
         if settings.RUN_API:
             try:
                 from app.api.server import start_api
+
                 logger.info("Starting API Server...")
                 bot = getattr(self, "bot", None)
                 dp = getattr(self, "dp", None)
@@ -95,7 +99,9 @@ class App:
                 logger.warning("Bot не инициализирован — Log Analyzer отключён")
                 return None
 
-            logger.info(f"Log Analyzer: отчёт будет отправляться в {settings.LOG_REPORT_TIME} → {settings.TECH_ADMIN_ID}")
+            logger.info(
+                f"Log Analyzer: отчёт будет отправляться в {settings.LOG_REPORT_TIME} → {settings.TECH_ADMIN_ID}"
+            )
             return self.log_analyzer.scheduler_loop(
                 bot=bot,
                 chat_id=settings.TECH_ADMIN_ID,

@@ -11,6 +11,7 @@ from app.container import Container
 
 logger = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
@@ -35,6 +36,7 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("Error during bot shutdown")
 
+
 def create_app(container: Container, bot=None, dp=None, printer_manager: PrinterConnectionManager = None) -> FastAPI:
     app = FastAPI(lifespan=lifespan)
 
@@ -58,12 +60,14 @@ def create_app(container: Container, bot=None, dp=None, printer_manager: Printer
 
     # Include routers
     from app.api.routers import printer, stats
+
     app.include_router(stats.router)
     app.include_router(printer.router)
 
     # Webhook endpoint for Aiogram
     if bot and dp and settings.WEBHOOK_URL:
         from aiogram import types
+
         @app.post(settings.WEBHOOK_PATH)
         async def bot_webhook(update: dict):
             telegram_update = types.Update(**update)
@@ -72,13 +76,9 @@ def create_app(container: Container, bot=None, dp=None, printer_manager: Printer
 
     return app
 
+
 async def start_api(container: Container, bot=None, dp=None, printer_manager=None):
     app = create_app(container, bot, dp, printer_manager)
-    config = uvicorn.Config(
-        app,
-        host=settings.API_HOST,
-        port=settings.API_PORT,
-        log_level="info"
-    )
+    config = uvicorn.Config(app, host=settings.API_HOST, port=settings.API_PORT, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()

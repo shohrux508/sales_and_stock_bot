@@ -14,10 +14,11 @@ router = APIRouter()
 
 security = HTTPBasic(auto_error=False)
 
+
 def verify_credentials(
     credentials: HTTPBasicCredentials | None = Depends(security),
     u: str | None = Query(None),
-    p: str | None = Query(None)
+    p: str | None = Query(None),
 ):
     # Check query params first (for Telegram WebApp convenience)
     if u == "admin" and p == settings.DASHBOARD_PASSWORD:
@@ -37,18 +38,17 @@ def verify_credentials(
         headers={"WWW-Authenticate": 'Basic realm="Sales Dashboard"'},
     )
 
+
 def get_container():
     # Helper backward compat if needed, but not used now
     pass
 
+
 @router.get("/api/stats")
-async def get_stats(
-    request: Request,
-    period: str = "week",
-    user: str = Depends(verify_credentials)
-):
+async def get_stats(request: Request, period: str = "week", user: str = Depends(verify_credentials)):
     try:
         from app.services.transaction_service import TransactionService
+
         transaction_service: TransactionService = request.app.state.container.get("transaction_service")
         transactions = await transaction_service.get_admin_statistics(period)
 
@@ -58,6 +58,7 @@ async def get_stats(
 
         # Calculate revenue per product for pie chart
         from collections import defaultdict
+
         product_stats = defaultdict(lambda: {"count": 0, "revenue": 0})
         staff_stats = defaultdict(lambda: {"count": 0, "revenue": 0})
 
@@ -76,23 +77,23 @@ async def get_stats(
             "total_revenue": total_revenue,
             "total_items": total_items,
             "products_breakdown": product_stats,
-            "staff_breakdown": staff_stats
+            "staff_breakdown": staff_stats,
         }
     except Exception:
         logger.exception("Error in get_stats API")
         raise HTTPException(status_code=500, detail="Statistikani yuklashda xatolik yuz berdi.") from None
 
+
 @router.get("/api/inventory")
-async def get_inventory(
-    request: Request,
-    user: str = Depends(verify_credentials)
-):
+async def get_inventory(request: Request, user: str = Depends(verify_credentials)):
     try:
         from app.services.product_service import ProductService
+
         product_service: ProductService = request.app.state.container.get("product_service")
 
         products = await product_service.get_all_products()
         from app.services.category_service import CategoryService
+
         category_service: CategoryService = request.app.state.container.get("category_service")
         categories = await category_service.get_all_categories()
 
@@ -100,13 +101,15 @@ async def get_inventory(
 
         inventory_data = []
         for p in products:
-            inventory_data.append({
-                "id": p.id,
-                "name": p.name,
-                "price": p.price,
-                "quantity": p.quantity,
-                "category": cat_map.get(p.category_id, "Kategoriyasiz")
-            })
+            inventory_data.append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "price": p.price,
+                    "quantity": p.quantity,
+                    "category": cat_map.get(p.category_id, "Kategoriyasiz"),
+                }
+            )
 
         return {"inventory": inventory_data}
     except HTTPException:
@@ -115,10 +118,9 @@ async def get_inventory(
         logger.exception("Error in get_inventory API")
         raise HTTPException(status_code=500, detail="Ombor ma'lumotlarini yuklashda xatolik yuz berdi.") from None
 
+
 @router.get("/", response_class=HTMLResponse)
-async def dashboard_view(
-    user: str = Depends(verify_credentials)
-):
+async def dashboard_view(user: str = Depends(verify_credentials)):
     try:
         file_path = os.path.join(os.path.dirname(__file__), "..", "templates", "index.html")
         with open(file_path, encoding="utf-8") as f:

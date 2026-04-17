@@ -9,11 +9,14 @@ from app.database.models import User, UserRole
 
 logger = logging.getLogger(__name__)
 
+
 class UserService:
     def __init__(self, async_session_maker: async_sessionmaker):
         self.session_maker = async_session_maker
 
-    async def get_or_create_user(self, tg_id: int, username: str | None, default_role: UserRole = UserRole.PENDING) -> tuple[User, bool]:
+    async def get_or_create_user(
+        self, tg_id: int, username: str | None, default_role: UserRole = UserRole.PENDING
+    ) -> tuple[User, bool]:
         """Get an existing user or create a new one. Returns tuple(User, is_created)."""
         try:
             async with self.session_maker() as session:
@@ -66,7 +69,9 @@ class UserService:
             logger.exception(f"DB error in update_user_role({tg_id}, {role})")
             return None
 
-    async def update_user_profile(self, tg_id: int, full_name: str | None = None, phone: str | None = None, is_active: bool | None = None) -> User | None:
+    async def update_user_profile(
+        self, tg_id: int, full_name: str | None = None, phone: str | None = None, is_active: bool | None = None
+    ) -> User | None:
         try:
             async with self.session_maker() as session:
                 update_data = {}

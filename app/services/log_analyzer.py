@@ -29,6 +29,7 @@ CHUNK_SIZE = 8192
 @dataclass
 class LogStats:
     """Агрегированная статистика за день."""
+
     # Принтер
     prints_success: int = 0
     prints_retry_success: int = 0
@@ -58,19 +59,15 @@ _PATTERNS: list[tuple[re.Pattern, str]] = [
     # Принтер — успех
     (re.compile(r"Чек .+ отправлен на принтер"), "prints_success"),
     (re.compile(r"Повторная печать чека .+ — успешно"), "prints_retry_success"),
-
     # Принтер — предупреждения
     (re.compile(r"Нет подключенных принтеров|Нет общих подключенных принтеров"), "printer_no_connection"),
     (re.compile(r"Принтер продавца .+ не подключен"), "printer_seller_offline"),
     (re.compile(r"Дубликат чека"), "receipt_duplicates"),
-
     # Принтер — ошибки
     (re.compile(r"Ошибка отправки на принтер|Ошибка повторной печати|Принтер сообщил об ошибке"), "printer_errors"),
-
     # Принтер — подключения
     (re.compile(r"Принтер подключен"), "printer_connects"),
     (re.compile(r"Принтер отключен|Принтер отключился"), "printer_disconnects"),
-
     # Система
     (re.compile(r"Setting up services"), "bot_restarts"),
     (re.compile(r"Failed to fetch updates|TelegramNetworkError|TelegramServerError"), "telegram_errors"),
@@ -166,29 +163,32 @@ class LogAnalyzerService:
         if stats.prints_retry_success:
             lines.append(f"  🔁 Повторная печать: <b>{stats.prints_retry_success}</b>")
 
-        lines.extend([
-            f"  ⚠️ Нет принтеров: <b>{stats.printer_no_connection}</b>",
-        ])
+        lines.extend(
+            [
+                f"  ⚠️ Нет принтеров: <b>{stats.printer_no_connection}</b>",
+            ]
+        )
 
         if stats.printer_seller_offline:
             lines.append(f"  ⚠️ Принтер продавца офлайн: <b>{stats.printer_seller_offline}</b>")
 
-        lines.extend([
-            f"  ❌ Ошибки печати: <b>{stats.printer_errors}</b>",
-            f"  🔁 Дубликаты: <b>{stats.receipt_duplicates}</b>",
-            f"  🔌 Подключений: <b>{stats.printer_connects}</b> | "
-            f"Отключений: <b>{stats.printer_disconnects}</b>",
-            "",
-            "🤖 <b>Система</b>",
-            f"  🔄 Перезапусков бота: <b>{stats.bot_restarts}</b>",
-            f"  ❌ Telegram ошибки: <b>{stats.telegram_errors}</b>",
-            f"  ❌ Redis ошибки: <b>{stats.redis_errors}</b>",
-            "",
-            "📈 <b>Общее</b>",
-            f"  ℹ️ Строк за период: <b>{stats.total_lines}</b>",
-            f"  ⚠️ Warnings: <b>{stats.total_warnings}</b>",
-            f"  ❌ Errors: <b>{stats.total_errors}</b>",
-        ])
+        lines.extend(
+            [
+                f"  ❌ Ошибки печати: <b>{stats.printer_errors}</b>",
+                f"  🔁 Дубликаты: <b>{stats.receipt_duplicates}</b>",
+                f"  🔌 Подключений: <b>{stats.printer_connects}</b> | Отключений: <b>{stats.printer_disconnects}</b>",
+                "",
+                "🤖 <b>Система</b>",
+                f"  🔄 Перезапусков бота: <b>{stats.bot_restarts}</b>",
+                f"  ❌ Telegram ошибки: <b>{stats.telegram_errors}</b>",
+                f"  ❌ Redis ошибки: <b>{stats.redis_errors}</b>",
+                "",
+                "📈 <b>Общее</b>",
+                f"  ℹ️ Строк за период: <b>{stats.total_lines}</b>",
+                f"  ⚠️ Warnings: <b>{stats.total_warnings}</b>",
+                f"  ❌ Errors: <b>{stats.total_errors}</b>",
+            ]
+        )
 
         # Последние ошибки
         if stats.error_samples:
@@ -197,10 +197,12 @@ class LogAnalyzerService:
             for i, sample in enumerate(stats.error_samples, 1):
                 lines.append(f"  {i}. <code>{sample}</code>")
 
-        lines.extend([
-            "",
-            f"⏰ Отчёт сформирован: {time_str}",
-        ])
+        lines.extend(
+            [
+                "",
+                f"⏰ Отчёт сформирован: {time_str}",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -230,9 +232,7 @@ class LogAnalyzerService:
             report_time: Время отправки в формате HH:MM (UZT +5)
         """
         target_hour, target_minute = map(int, report_time.split(":"))
-        logger.info(
-            f"📊 Log Analyzer запущен. Отчёт будет отправляться в {report_time} (UZT)"
-        )
+        logger.info(f"📊 Log Analyzer запущен. Отчёт будет отправляться в {report_time} (UZT)")
 
         while True:
             try:
@@ -240,11 +240,7 @@ class LogAnalyzerService:
                 today = now.date()
 
                 # Проверяем, нужно ли отправить отчёт
-                if (
-                    now.hour == target_hour
-                    and now.minute == target_minute
-                    and self._report_sent_date != today
-                ):
+                if now.hour == target_hour and now.minute == target_minute and self._report_sent_date != today:
                     await self.send_report(bot, chat_id)
                     self._report_sent_date = today
 
@@ -296,9 +292,9 @@ class LogAnalyzerService:
             # Сообщение: после " - " в остатке
             dash_idx = rest.find(" - ", pipe_idx)
             if dash_idx == -1:
-                message = rest[pipe_idx + 1:].strip()
+                message = rest[pipe_idx + 1 :].strip()
             else:
-                message = rest[dash_idx + 3:].strip()
+                message = rest[dash_idx + 3 :].strip()
 
             return log_dt, level, message
 

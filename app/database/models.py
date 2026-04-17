@@ -15,10 +15,12 @@ class UserRole(enum.Enum):
     PENDING = "pending"
     BANNED = "banned"
 
+
 class TransactionType(enum.Enum):
     SALE = "sale"
     RECEIPT = "receipt"
     WRITE_OFF = "write_off"
+
 
 class User(Base):
     __tablename__ = "users"
@@ -31,12 +33,11 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), default=UserRole.WORKER)
     kpi: Mapped[int] = mapped_column(Integer, default=0)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    is_active: Mapped[bool] = mapped_column(Integer, default=1) # 1 for True, 0 for False (SQLite compatibility)
+    is_active: Mapped[bool] = mapped_column(Integer, default=1)  # 1 for True, 0 for False (SQLite compatibility)
 
     # Relationships
-    transactions: Mapped[list["Transaction"]] = relationship(
-        "Transaction", back_populates="user"
-    )
+    transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="user")
+
 
 class Category(Base):
     __tablename__ = "categories"
@@ -44,11 +45,7 @@ class Category(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
 
-    products: Mapped[list["Product"]] = relationship(
-        "Product", back_populates="category", cascade="all, delete-orphan"
-    )
-
-
+    products: Mapped[list["Product"]] = relationship("Product", back_populates="category", cascade="all, delete-orphan")
 
 
 class Product(Base):
@@ -60,13 +57,11 @@ class Product(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=0)
     barcode: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
-    is_active: Mapped[int] = mapped_column(Integer, default=1) # 1 for True, 0 for False (SQLite compatibility)
+    is_active: Mapped[int] = mapped_column(Integer, default=1)  # 1 for True, 0 for False (SQLite compatibility)
 
     # Relationships
     category: Mapped["Category"] = relationship("Category", back_populates="products")
-    transactions: Mapped[list["Transaction"]] = relationship(
-        "Transaction", back_populates="product"
-    )
+    transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="product")
 
 
 class Transaction(Base):

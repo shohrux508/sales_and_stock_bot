@@ -10,6 +10,7 @@ from app.database.models import Product
 
 logger = logging.getLogger(__name__)
 
+
 class ProductService:
     def __init__(self, async_session_maker: async_sessionmaker):
         self.session_maker = async_session_maker
@@ -17,7 +18,12 @@ class ProductService:
     async def get_all_products(self) -> Sequence[Product]:
         try:
             async with self.session_maker() as session:
-                stmt = select(Product).options(selectinload(Product.category)).where(Product.is_active == 1).order_by(Product.name)
+                stmt = (
+                    select(Product)
+                    .options(selectinload(Product.category))
+                    .where(Product.is_active == 1)
+                    .order_by(Product.name)
+                )
                 result = await session.execute(stmt)
                 return result.scalars().all()
         except SQLAlchemyError:
@@ -37,7 +43,12 @@ class ProductService:
     async def get_products_by_category(self, category_id: int) -> Sequence[Product]:
         try:
             async with self.session_maker() as session:
-                stmt = select(Product).options(selectinload(Product.category)).where(Product.category_id == category_id, Product.is_active == 1).order_by(Product.name)
+                stmt = (
+                    select(Product)
+                    .options(selectinload(Product.category))
+                    .where(Product.category_id == category_id, Product.is_active == 1)
+                    .order_by(Product.name)
+                )
                 result = await session.execute(stmt)
                 return result.scalars().all()
         except SQLAlchemyError:

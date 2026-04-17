@@ -17,9 +17,8 @@ class AuthMiddleware(BaseMiddleware):
         self,
         handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
         event: TelegramObject,
-        data: dict[str, Any]
+        data: dict[str, Any],
     ) -> Any:
-
         user_id = None
         username = None
 
@@ -64,10 +63,13 @@ class AuthMiddleware(BaseMiddleware):
                 # Notify admin if someone new registered as PENDING
                 if created and user.role == UserRole.PENDING:
                     from app.telegram.keyboards.admin import approve_user_kb
+
                     text = f"👤 <b>Yangi ruxsat so'rovi!</b>\nFoydalanuvchi: @{user.username or 'username_yoq'}\nID: {user.tg_id}"
                     for admin_id in admin_ids:
                         try:
-                            await event.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=approve_user_kb(user.tg_id))
+                            await event.bot.send_message(
+                                admin_id, text, parse_mode="HTML", reply_markup=approve_user_kb(user.tg_id)
+                            )
                         except Exception as e:
                             logger.error(f"Failed to send alert to admin {admin_id}: {e}")
 
@@ -78,15 +80,20 @@ class AuthMiddleware(BaseMiddleware):
                             await user_service.update_user_role(user.tg_id, UserRole.PENDING)
                             user.role = UserRole.PENDING
                             from app.telegram.keyboards.admin import approve_user_kb
+
                             text = f"👤 <b>Ruxsat uchun qayta so'rov!</b>\nFoydalanuvchi: @{user.username or 'username_yoq'}\nID: {user.tg_id}"
                             for admin_id in admin_ids:
                                 try:
-                                    await event.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=approve_user_kb(user.tg_id))
+                                    await event.bot.send_message(
+                                        admin_id, text, parse_mode="HTML", reply_markup=approve_user_kb(user.tg_id)
+                                    )
                                 except Exception as e:
                                     logger.error(f"Failed to send alert to admin {admin_id}: {e}")
                         except Exception:
                             logger.exception(f"Auth middleware: failed to re-request access for {user.tg_id}")
-                        await event.answer("⏳ Sizning so'rovingiz qayta ko'rib chiqish uchun yuborildi. Administrator tasdiqlashini kuting.")
+                        await event.answer(
+                            "⏳ Sizning so'rovingiz qayta ko'rib chiqish uchun yuborildi. Administrator tasdiqlashini kuting."
+                        )
                     else:
                         if isinstance(event, Message):
                             await event.answer("🚫 Sizda ruxsat yo'q. Yangi so'rov yuborish uchun /start ni bosing.")
@@ -95,7 +102,9 @@ class AuthMiddleware(BaseMiddleware):
                     return
                 elif user.role == UserRole.PENDING:
                     if isinstance(event, Message):
-                        await event.answer("⏳ Sizning so'rovingiz ko'rib chiqilmoqda. Administrator tasdiqlashini kuting.")
+                        await event.answer(
+                            "⏳ Sizning so'rovingiz ko'rib chiqilmoqda. Administrator tasdiqlashini kuting."
+                        )
                     elif isinstance(event, CallbackQuery):
                         await event.answer("⏳ Sizning so'rovingiz moderatsiyada.", show_alert=True)
                     return
