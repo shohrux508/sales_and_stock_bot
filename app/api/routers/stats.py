@@ -1,10 +1,12 @@
 import logging
-from fastapi import APIRouter, Request, Depends, HTTPException, status, Query
+import os
+import secrets
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-import secrets
+
 from app.config import settings
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,7 @@ def verify_credentials(
     # Check query params first (for Telegram WebApp convenience)
     if u == "admin" and p == settings.DASHBOARD_PASSWORD:
         return "admin"
-        
+
     # Standard Basic Auth fallback
     if credentials:
         correct_username = secrets.compare_digest(credentials.username, "admin")
@@ -42,32 +44,32 @@ def get_container():
 @router.get("/api/stats")
 async def get_stats(
     request: Request,
-    period: str = "week", 
+    period: str = "week",
     user: str = Depends(verify_credentials)
 ):
     try:
         from app.services.transaction_service import TransactionService
         transaction_service: TransactionService = request.app.state.container.get("transaction_service")
         transactions = await transaction_service.get_admin_statistics(period)
-        
+
         total_sales = len(transactions)
         total_revenue = sum(t.total_price for t in transactions)
         total_items = sum(t.amount for t in transactions)
-        
+
         # Calculate revenue per product for pie chart
         from collections import defaultdict
         product_stats = defaultdict(lambda: {"count": 0, "revenue": 0})
         staff_stats = defaultdict(lambda: {"count": 0, "revenue": 0})
-        
+
         for t in transactions:
             p_name = t.product.name if t.product else "O'chirilgan mahsulot"
             product_stats[p_name]["count"] += t.amount
             product_stats[p_name]["revenue"] += t.total_price
-            
+
             u_name = t.user.username or f"ID:{t.user.tg_id}" if t.user else "Tizim"
             staff_stats[u_name]["count"] += t.amount
             staff_stats[u_name]["revenue"] += t.total_price
-            
+
         return {
             "period": period,
             "total_transactions": total_sales,
@@ -76,9 +78,9 @@ async def get_stats(
             "products_breakdown": product_stats,
             "staff_breakdown": staff_stats
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Error in get_stats API")
-        raise HTTPException(status_code=500, detail="Statistikani yuklashda xatolik yuz berdi.")
+        raise HTTPException(status_code=500, detail="Statistikani yuklashda xatolik yuz berdi.") from None
 
 @router.get("/api/inventory")
 async def get_inventory(
@@ -88,14 +90,14 @@ async def get_inventory(
     try:
         from app.services.product_service import ProductService
         product_service: ProductService = request.app.state.container.get("product_service")
-        
+
         products = await product_service.get_all_products()
         from app.services.category_service import CategoryService
         category_service: CategoryService = request.app.state.container.get("category_service")
         categories = await category_service.get_all_categories()
-        
+
         cat_map = {c.id: c.name for c in categories}
-        
+
         inventory_data = []
         for p in products:
             inventory_data.append({
@@ -105,13 +107,13 @@ async def get_inventory(
                 "quantity": p.quantity,
                 "category": cat_map.get(p.category_id, "Kategoriyasiz")
             })
-            
+
         return {"inventory": inventory_data}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error in get_inventory API")
-        raise HTTPException(status_code=500, detail="Ombor ma'lumotlarini yuklashda xatolik yuz berdi.")
+        raise HTTPException(status_code=500, detail="Ombor ma'lumotlarini yuklashda xatolik yuz berdi.") from None
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_view(
@@ -119,11 +121,11 @@ async def dashboard_view(
 ):
     try:
         file_path = os.path.join(os.path.dirname(__file__), "..", "templates", "index.html")
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
         logger.error(f"Dashboard template not found: {file_path}")
-        raise HTTPException(status_code=500, detail="Dashboard shablon fayli topilmadi.")
-    except Exception as e:
+        raise HTTPException(status_code=500, detail="Dashboard shablon fayli topilmadi.") from None
+    except Exception:
         logger.exception("Error loading dashboard")
-        raise HTTPException(status_code=500, detail="Dashboard yuklashda xatolik yuz berdi.")
+        raise HTTPException(status_code=500, detail="Dashboard yuklashda xatolik yuz berdi.") from None

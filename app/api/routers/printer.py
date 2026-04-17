@@ -9,7 +9,9 @@ WebSocket эндпоинт для подключения локального к
 """
 
 import logging
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
 from app.config import settings
 
 router = APIRouter(tags=["printer"])
@@ -37,7 +39,7 @@ async def printer_status(secret_token: str | None = None):
 async def printer_websocket(websocket: WebSocket, secret_token: str, seller_id: str | None = None):
     """
     WebSocket-эндпоинт для подключения локального клиента принтера.
-    
+
     Авторизация через secret_token из .env (PRINTER_SECRET_TOKEN).
     После подключения клиент ожидает JSON-сообщения с данными для печати.
     Клиент отвечает ACK/ERROR после обработки.

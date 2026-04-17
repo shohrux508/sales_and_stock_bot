@@ -1,7 +1,9 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+
 from app.config import settings
 from app.database.models import UserRole
+
 
 def main_admin_kb() -> ReplyKeyboardMarkup:
     kb = [
@@ -14,17 +16,17 @@ def main_admin_kb() -> ReplyKeyboardMarkup:
 
 def categories_list_kb(categories, for_selection=False, page: int = 0, page_size: int = 20) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    
+
     start = page * page_size
     end = start + page_size
     page_items = categories[start:end]
-    
+
     for cat in page_items:
         cb_data = f"select_cat_{cat.id}" if for_selection else f"manage_cat_{cat.id}"
         builder.button(text=cat.name, callback_data=cb_data)
-        
+
     builder.adjust(2)
-    
+
     # Navigation buttons
     nav_btns = []
     if page > 0:
@@ -33,13 +35,13 @@ def categories_list_kb(categories, for_selection=False, page: int = 0, page_size
     if end < len(categories):
         suffix = "_sel" if for_selection else ""
         nav_btns.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"cat_page{suffix}_{page+1}"))
-    
+
     if nav_btns:
         builder.row(*nav_btns)
-    
+
     if not for_selection:
         builder.row(InlineKeyboardButton(text="➕ Kategoriya yaratish", callback_data="add_category"))
-        
+
     return builder.as_markup()
 
 
@@ -61,31 +63,31 @@ def category_delete_confirm_kb(category_id: int) -> InlineKeyboardMarkup:
 
 def products_list_kb(products, page: int = 0, page_size: int = 20) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    
+
     start = page * page_size
     end = start + page_size
     page_items = products[start:end]
-    
+
     for product in page_items:
         builder.button(
             text=f"{product.name} ({product.quantity} ta)",
             callback_data=f"prod_edit_{product.id}"
         )
-    
+
     builder.adjust(2)
-    
+
     # Navigation buttons
     nav_btns = []
     if page > 0:
         nav_btns.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"stock_page_{page-1}"))
     if end < len(products):
         nav_btns.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"stock_page_{page+1}"))
-    
+
     if nav_btns:
         builder.row(*nav_btns)
-        
+
     builder.row(InlineKeyboardButton(text="➕ Mahsulot qo'shish", callback_data="add_product"))
-    
+
     return builder.as_markup()
 
 
@@ -155,58 +157,58 @@ def print_retry_kb(order_id: str) -> InlineKeyboardMarkup:
 
 def staff_list_kb(workers, page: int = 0, page_size: int = 20) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    
+
     start = page * page_size
     end = start + page_size
     page_items = workers[start:end]
-    
+
     for w in page_items:
         role_label = ""
         if w.role == UserRole.PENDING:
             role_label = " (⏳)"
         elif w.role == UserRole.BANNED:
             role_label = " (🚫)"
-            
+
         name = w.username or f"ID {w.tg_id}"
         builder.button(text=f"👤 {name}{role_label}", callback_data=f"staff_profile_{w.tg_id}")
-        
+
     builder.adjust(2)
-    
+
     # Navigation buttons
     nav_btns = []
     if page > 0:
         nav_btns.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"staff_page_{page-1}"))
     if end < len(workers):
         nav_btns.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"staff_page_{page+1}"))
-    
+
     if nav_btns:
         builder.row(*nav_btns)
-        
+
     return builder.as_markup()
 
 
 def staff_profile_kb(tg_id: int, role: UserRole) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    
+
     # If the user is pending, show approve/reject buttons first
     if role == UserRole.PENDING:
         builder.button(text="✅ Tasdiqlash", callback_data=f"approve_{tg_id}")
         builder.button(text="⛔ Rad etish", callback_data=f"reject_{tg_id}")
     elif role == UserRole.BANNED:
         builder.button(text="✅ Ruxsatni qaytarish", callback_data=f"approve_{tg_id}")
-    
+
     builder.button(text="📝 F.I.Sh ni o'zgartirish", callback_data=f"staff_edit_name_{tg_id}")
     builder.button(text="📞 Telefonni o'zgartirish", callback_data=f"staff_edit_phone_{tg_id}")
     builder.button(text="🎯 KPI ni o'zgartirish", callback_data=f"staff_edit_kpi_{tg_id}")
     builder.button(text="📅 Hisobot (bugun)", callback_data=f"staff_excel_today_{tg_id}")
     builder.button(text="🗓 Hisobot (7 kun)", callback_data=f"staff_excel_week_{tg_id}")
-    
+
     if role == UserRole.WORKER:
         builder.button(text="🗑 O'chirish/Bo'shatish", callback_data=f"staff_revoke_{tg_id}")
-        
+
     builder.button(text="🔙 Xodimlar ro'yxatiga qaytish", callback_data="staff_list")
-    
-    # Calculate row adjustment: 
+
+    # Calculate row adjustment:
     # If pending: 2 (approve/reject), then the rest
     if role == UserRole.PENDING:
         builder.adjust(2, 2, 1, 2, 1, 1)
@@ -214,5 +216,5 @@ def staff_profile_kb(tg_id: int, role: UserRole) -> InlineKeyboardMarkup:
         builder.adjust(1, 2, 1, 2, 1, 1)
     else:
         builder.adjust(2, 1, 2, 1, 1)
-        
+
     return builder.as_markup()

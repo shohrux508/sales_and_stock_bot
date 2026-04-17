@@ -10,8 +10,8 @@ import asyncio
 import logging
 import os
 import re
-from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -94,12 +94,12 @@ class LogAnalyzerService:
     def analyze(self, days: int = 1) -> LogStats:
         """
         Анализирует лог-файл за указанное количество дней (UZT +5).
-        
+
         Ограничено 10 днями для производительности.
         """
         # Ограничиваем период до 10 дней
         days = max(1, min(days, 10))
-        
+
         stats = LogStats()
 
         if not self.log_path.exists():
@@ -146,7 +146,7 @@ class LogAnalyzerService:
             report_date = datetime.now(UZT)
 
         days = max(1, min(days, 10))
-        
+
         if days == 1:
             date_info = report_date.strftime("%d.%m.%Y")
         else:
@@ -273,7 +273,7 @@ class LogAnalyzerService:
         Парсит строку лога.
 
         Формат: "2026-03-27 18:32:12 | INFO     | name:func:line - message"
-        
+
         Возвращает (datetime, level, message) или None если строка не парсится.
         """
         # Быстрая проверка: строка лога начинается с даты "YYYY-"
@@ -317,7 +317,7 @@ class LogAnalyzerService:
     def _read_lines_reverse(filepath: Path):
         """
         Генератор: читает файл с конца, возвращая строки в обратном порядке.
-        
+
         Эффективно работает с большими файлами — читает чанками по CHUNK_SIZE.
         """
         with open(filepath, "rb") as f:

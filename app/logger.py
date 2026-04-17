@@ -1,6 +1,8 @@
 import logging
 import sys
+
 from loguru import logger
+
 
 class InterceptHandler(logging.Handler):
     """
@@ -24,7 +26,7 @@ class InterceptHandler(logging.Handler):
 
 def setup_logging():
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
-    
+
     # Configure Loguru
     logger.configure(
         handlers=[

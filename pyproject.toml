@@ -1,0 +1,33 @@
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+explicit_package_bases = true
+warn_return_any = false
+warn_unused_configs = true
+check_untyped_defs = false
+disallow_untyped_defs = false
+exclude = ["migrations/", "tests/", ".venv/"]
+# TODO: Постепенно включать строгие проверки по мере аннотации кода
+# disable_error_code = [] — убрать после полной типизации
+disable_error_code = ["union-attr", "arg-type", "assignment", "return-value", "attr-defined", "call-overload", "index", "operator", "override", "var-annotated", "call-arg", "misc"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+exclude = ["migrations/", ".venv/"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+]
+ignore = ["E501", "B008"]  # E501 — line length через formatter; B008 — стандартный паттерн FastAPI Depends()
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

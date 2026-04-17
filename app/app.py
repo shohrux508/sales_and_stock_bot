@@ -1,13 +1,14 @@
 import asyncio
 import logging
+
 from app.config import settings
 from app.container import Container
-from app.services.user_service import UserService
-from app.services.product_service import ProductService
-from app.services.transaction_service import TransactionService
+from app.database.core import async_session_maker
 from app.services.category_service import CategoryService
 from app.services.log_analyzer import LogAnalyzerService
-from app.database.core import async_session_maker
+from app.services.product_service import ProductService
+from app.services.transaction_service import TransactionService
+from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class App:
             self.printer_manager = PrinterConnectionManager()
             self.container.register("printer_manager", self.printer_manager)
             logger.info("PrinterConnectionManager зарегистрирован в DI-контейнере")
-        except Exception as e:
+        except Exception:
             logger.exception("Не удалось инициализировать PrinterConnectionManager")
 
         # Регистрация Log Analyzer
@@ -38,7 +39,7 @@ class App:
             self.log_analyzer = LogAnalyzerService()
             self.container.register("log_analyzer", self.log_analyzer)
             logger.info("LogAnalyzerService зарегистрирован в DI-контейнере")
-        except Exception as e:
+        except Exception:
             logger.exception("Не удалось инициализировать LogAnalyzerService")
 
     async def init_printer_redis(self):
@@ -46,7 +47,7 @@ class App:
         try:
             if self.printer_manager and settings.REDIS_URL:
                 await self.printer_manager.init_redis(settings.REDIS_URL)
-        except Exception as e:
+        except Exception:
             logger.exception("Ошибка инициализации Redis для принтера")
 
     async def setup_telegram(self):
@@ -57,14 +58,14 @@ class App:
                 bot, dp = create_bot_and_dp(self.container)
                 self.bot = bot
                 self.dp = dp
-                
+
                 # If no webhook is configured, or API is disabled, fallback to polling
                 if not settings.RUN_API or not settings.WEBHOOK_URL:
                     logger.info("Starting Telegram Bot with Polling...")
                     return start_telegram_polling(bot, dp)
                 else:
                     logger.info("Telegram Bot will run via Webhooks through FastAPI.")
-            except Exception as e:
+            except Exception:
                 logger.exception("Ошибка запуска Telegram бота")
         return None
 
@@ -76,7 +77,7 @@ class App:
                 bot = getattr(self, "bot", None)
                 dp = getattr(self, "dp", None)
                 return start_api(self.container, bot, dp, self.printer_manager)
-            except Exception as e:
+            except Exception:
                 logger.exception("Ошибка запуска API сервера")
         return None
 
@@ -100,22 +101,22 @@ class App:
                 chat_id=settings.TECH_ADMIN_ID,
                 report_time=settings.LOG_REPORT_TIME,
             )
-        except Exception as e:
+        except Exception:
             logger.exception("Ошибка запуска Log Analyzer")
             return None
 
     async def run(self):
         self.setup_services()
-        
+
         # Инициализация Redis для принтера
         await self.init_printer_redis()
-        
+
         tasks = []
-        
+
         telegram_task = await self.setup_telegram()
         if telegram_task:
             tasks.append(telegram_task)
-            
+
         api_task = await self.setup_api()
         if api_task:
             tasks.append(api_task)

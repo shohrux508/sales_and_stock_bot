@@ -8,10 +8,8 @@
 - Очередь непечатанных чеков (для fallback через Telegram)
 """
 
-import logging
 import json
-from typing import Optional
-from datetime import datetime
+import logging
 
 from fastapi import WebSocket
 
@@ -93,7 +91,7 @@ class PrinterConnectionManager:
     async def send_print_job(self, order_data: dict) -> bool:
         """
         Отправляет задание на печать подключенному принтеру.
-        
+
         Returns:
             True — если чек отправлен успешно
             False — если нет подключенных принтеров или дубль
@@ -132,7 +130,7 @@ class PrinterConnectionManager:
         # Cleanup disconnected
         for client_id in disconnected:
             self.disconnect(client_id)
-        
+
         logger.warning(f"Нет доступных принтеров для чека {order_id}. Добавлено в очередь.")
 
         # Добавляем в очередь, если не удалось напечатать
@@ -152,7 +150,7 @@ class PrinterConnectionManager:
         except Exception as e:
             logger.error(f"Redis error adding to pending: {e}")
 
-    async def get_pending_job(self, order_id: str) -> Optional[dict]:
+    async def get_pending_job(self, order_id: str) -> dict | None:
         """Получает конкретный чек из очереди по order_id."""
         jobs = await self.get_all_pending_jobs()
         for job in jobs:
@@ -188,7 +186,7 @@ class PrinterConnectionManager:
             return False
 
         # Пытаемся отправить
-        for client_id, ws in self.active_connections.items():
+        for _client_id, ws in self.active_connections.items():
             try:
                 await ws.send_json(job)
                 await self._mark_as_printed(order_id)

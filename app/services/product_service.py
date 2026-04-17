@@ -1,9 +1,9 @@
-from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy import select, update, delete
-from sqlalchemy.exc import SQLAlchemyError
-from typing import Sequence
 import logging
+from collections.abc import Sequence
 
+from sqlalchemy import select, update
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.database.models import Product
@@ -20,7 +20,7 @@ class ProductService:
                 stmt = select(Product).options(selectinload(Product.category)).where(Product.is_active == 1).order_by(Product.name)
                 result = await session.execute(stmt)
                 return result.scalars().all()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception("DB error in get_all_products")
             return []
 
@@ -30,17 +30,17 @@ class ProductService:
                 stmt = select(Product).options(selectinload(Product.category)).where(Product.id == product_id)
                 result = await session.execute(stmt)
                 return result.scalar_one_or_none()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in get_product_by_id({product_id})")
             return None
-            
+
     async def get_products_by_category(self, category_id: int) -> Sequence[Product]:
         try:
             async with self.session_maker() as session:
                 stmt = select(Product).options(selectinload(Product.category)).where(Product.category_id == category_id, Product.is_active == 1).order_by(Product.name)
                 result = await session.execute(stmt)
                 return result.scalars().all()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in get_products_by_category({category_id})")
             return []
 
@@ -70,7 +70,7 @@ class ProductService:
                     await session.commit()
                     await session.refresh(product)
                     return product
-        except Exception as e:
+        except Exception:
             logger.exception(f"DB error in create_product({name})")
             raise
 
@@ -89,7 +89,7 @@ class ProductService:
                 if product:
                     await session.commit()
                 return product
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in update_quantity({product_id}, {quantity_delta})")
             return None
 
@@ -100,7 +100,7 @@ class ProductService:
                 result = await session.execute(stmt)
                 await session.commit()
                 return result.rowcount > 0
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in update_barcode({product_id})")
             return False
 
@@ -110,7 +110,7 @@ class ProductService:
                 stmt = select(Product).options(selectinload(Product.category)).where(Product.barcode == barcode)
                 result = await session.execute(stmt)
                 return result.scalar_one_or_none()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in get_product_by_barcode({barcode})")
             return None
 
@@ -121,6 +121,6 @@ class ProductService:
                 result = await session.execute(stmt)
                 await session.commit()
                 return result.rowcount > 0
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in delete_product({product_id})")
             return False

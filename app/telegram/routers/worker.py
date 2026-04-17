@@ -1,22 +1,24 @@
-from aiogram import Router, types, F
-from aiogram.fsm.context import FSMContext
-from app.database.models import User, UserRole
-from app.container import Container
+import logging
 
+from aiogram import F, Router, types
+from aiogram.fsm.context import FSMContext
+
+from app.config import settings
+from app.container import Container
+from app.database.models import User
+from app.services.category_service import CategoryService
 from app.services.product_service import ProductService
 from app.services.transaction_service import TransactionService
-from app.services.category_service import CategoryService
-
-from app.telegram.states.worker import SellState
 from app.telegram.keyboards.worker import (
-    main_worker_kb, sell_product_list_kb, cancel_inline_kb,
-    worker_categories_kb, cart_decision_kb, after_checkout_kb,
-    kpi_progress_bar
+    after_checkout_kb,
+    cancel_inline_kb,
+    cart_decision_kb,
+    kpi_progress_bar,
+    main_worker_kb,
+    sell_product_list_kb,
+    worker_categories_kb,
 )
-from app.telegram.keyboards.admin import undo_tx_kb
-from app.config import settings
-
-import logging
+from app.telegram.states.worker import SellState
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ async def worker_start(message: types.Message, db_user: User):
             f"🖨️ Sizning ID raqamingiz (printer uchun): <b>{db_user.id}</b>"
         )
         await message.answer(welcome_text, reply_markup=main_worker_kb(), parse_mode="HTML")
-    except Exception as e:
+    except Exception:
         logger.exception("Error in worker_start")
         await message.answer("⚠️ Xatolik yuz berdi.")
 
@@ -60,14 +62,14 @@ async def quick_new_sale(call: types.CallbackQuery, state: FSMContext, container
     try:
         category_service: CategoryService = container.get("category_service")
         categories = await category_service.get_all_categories()
-        
+
         if not categories:
             await call.answer("Hozircha kategoriyalar yo'q.", show_alert=True)
             return
-        
+
         await state.set_state(SellState.category_id)
         await call.message.edit_text("Sotish uchun mahsulotni tanlang:\nKategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in quick_new_sale")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -78,15 +80,15 @@ async def process_scanned_barcode(message: types.Message, state: FSMContext, con
         barcode = message.text.strip()
         product_service: ProductService = container.get("product_service")
         product = await product_service.get_product_by_barcode(barcode)
-        
+
         if not product:
             await message.answer(f"Shtrix-kod {barcode} bo'lgan mahsulot topilmadi.")
             return
-            
+
         if product.quantity == 0:
             await message.answer(f"Mahsulot <b>{product.name}</b> topildi, ammo u omborda qolmagan (0 dona).", parse_mode="HTML")
             return
-            
+
         await state.update_data(product_id=product.id, max_qty=product.quantity, product_name=product.name, price=float(product.price))
         # Отправляем inline-кнопку отмены вместо ReplyKeyboard
         await message.answer(
@@ -95,7 +97,7 @@ async def process_scanned_barcode(message: types.Message, state: FSMContext, con
             reply_markup=cancel_inline_kb()
         )
         await state.set_state(SellState.amount)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_scanned_barcode")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
@@ -104,14 +106,14 @@ async def start_sell(message: types.Message, container: Container, state: FSMCon
     try:
         category_service: CategoryService = container.get("category_service")
         categories = await category_service.get_all_categories()
-        
+
         if not categories:
             await message.answer("Hozircha kategoriyalar yo'q. Sotuvni amalga oshirib bo'lmaydi.")
             return
-            
+
         await state.set_state(SellState.category_id)
         await message.answer("Kategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in start_sell")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
@@ -120,19 +122,19 @@ async def process_sell_cat(call: types.CallbackQuery, state: FSMContext, contain
     try:
         cat_id = int(call.data.split("_")[2])
         await state.update_data(category_id=cat_id)
-        
+
         product_service: ProductService = container.get("product_service")
         products = await product_service.get_products_by_category(cat_id)
-        
+
         available_products = [p for p in products if p.quantity > 0]
-        
+
         if not available_products:
             await call.answer("Ushbu kategoriyada mavjud mahsulotlar yo'q.", show_alert=True)
             return
-            
+
         await state.set_state(SellState.product_id)
         await call.message.edit_text("Sotish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(available_products, category_id=cat_id))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_sell_cat")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -142,12 +144,12 @@ async def cb_sell_page(call: types.CallbackQuery, container: Container):
         parts = call.data.split("_")
         cat_id = int(parts[2])
         page = int(parts[3])
-        
+
         product_service: ProductService = container.get("product_service")
         products = await product_service.get_products_by_category(cat_id)
-        
+
         await call.message.edit_text("Sotish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(products, category_id=cat_id, page=page))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_sell_page")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -160,7 +162,7 @@ async def process_back_to_w_cats(call: types.CallbackQuery, state: FSMContext, c
         categories = await category_service.get_all_categories()
         await state.set_state(SellState.category_id)
         await call.message.edit_text("Kategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_back_to_w_cats")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -171,7 +173,7 @@ async def cb_worker_cat_page(call: types.CallbackQuery, container: Container):
         category_service: CategoryService = container.get("category_service")
         categories = await category_service.get_all_categories()
         await call.message.edit_text("Kategoriyani tanlang:", reply_markup=worker_categories_kb(categories, page=page))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_worker_cat_page")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -182,7 +184,7 @@ async def process_sell_product(call: types.CallbackQuery, state: FSMContext, con
         product_id = int(call.data.split("_")[1])
         product_service: ProductService = container.get("product_service")
         product = await product_service.get_product_by_id(product_id)
-        
+
         if not product or product.quantity == 0:
             await call.answer("Ushbu mahsulot tugagan yoki o'chirilgan.", show_alert=True)
             # Fetch products for the category to refresh the keyboard
@@ -193,7 +195,7 @@ async def process_sell_product(call: types.CallbackQuery, state: FSMContext, con
                 await call.message.edit_reply_markup(reply_markup=sell_product_list_kb(products, category_id=cat_id))
             return
 
-            
+
         await state.update_data(product_id=product_id, max_qty=product.quantity, product_name=product.name, price=float(product.price))
         # Редактируем текущее сообщение + inline-отмена (нижнее меню остается!)
         await call.message.edit_text(
@@ -202,7 +204,7 @@ async def process_sell_product(call: types.CallbackQuery, state: FSMContext, con
             reply_markup=cancel_inline_kb()
         )
         await state.set_state(SellState.amount)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_sell_product")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -216,17 +218,17 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
         except ValueError:
             await message.answer("Iltimos, to'g'ri musbat son kiriting.")
             return
-            
+
         data = await state.get_data()
         max_qty = data['max_qty']
-        
+
         cart = data.get('cart', [])
         already_in_cart = sum(item['amount'] for item in cart if item['product_id'] == data['product_id'])
-        
+
         if amount + already_in_cart > max_qty:
             await message.answer(f"Xatolik! Omborda jami {max_qty} dona bor. Savatda esa {already_in_cart} dona. Miqdorni qayta kiriting:")
             return
-            
+
         cart.append({
             'product_id': data['product_id'],
             'product_name': data['product_name'],
@@ -234,11 +236,11 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
             'amount': amount
         })
         await state.update_data(cart=cart)
-        
+
         # Показываем содержимое корзины
         cart_text = "\n".join([f"• <b>{item['product_name']}</b> <i>({item['amount']} dona)</i>" for item in cart])
         total_sum = sum(item['price'] * item['amount'] for item in cart)
-        
+
         msg = (
             f"✅ <b>Mahsulot savatga qo'shildi.</b>\n\n"
             f"📋 <b>Savat:</b>\n"
@@ -246,14 +248,14 @@ async def process_sell_amount(message: types.Message, state: FSMContext, contain
             f"💰 <b>Jami:</b> {total_sum:,} so'm\n\n"
             f"Keyingi amalni tanlang?"
         )
-        
+
         await message.answer(
-            msg, 
+            msg,
             parse_mode="HTML",
             reply_markup=cart_decision_kb()
         )
         await state.set_state(SellState.checkout_decision)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_sell_amount")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
@@ -266,7 +268,7 @@ async def cart_add_more(call: types.CallbackQuery, state: FSMContext, container:
         categories = await category_service.get_all_categories()
         await state.set_state(SellState.category_id)
         await call.message.edit_text("Kategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cart_add_more")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -278,29 +280,29 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
         if not cart:
             await call.answer("Savat bo'sh!", show_alert=True)
             return
-            
+
         import uuid
         order_group_id = str(uuid.uuid4())
-        
+
         transaction_service: TransactionService = container.get("transaction_service")
-        
+
         transactions = await transaction_service.create_bulk_sale(
             user_id=db_user.id,
             items=cart,
             order_group_id=order_group_id
         )
-                
+
         if not transactions:
             await call.message.edit_text("Rasmiylashtirishda xatolik. Ehtimol, tovarlar tugagan.")
             await state.clear()
             return
-            
+
         total_rub = sum(tx.total_price for tx in transactions)
         total_qty = sum(tx.amount for tx in transactions)
-        
+
         items_text_worker = "\n".join([f"• <b>{tx.product.name}</b> <i>({tx.amount} dona)</i> — {tx.total_price:,} so'm" for tx in transactions])
         items_text_admin = "\n".join([f"• <b>{tx.product.name}</b> <i>({tx.amount} dona)</i> — {tx.total_price:,} so'm" for tx in transactions])
-        
+
         # Редактируем сообщение с чеком + кнопка "Новая продажа"
         msg_checkout = (
             f"✅ <b>Chek chiqarildi!</b>\n\n"
@@ -313,10 +315,10 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
             parse_mode="HTML",
             reply_markup=after_checkout_kb()
         )
-        
+
         # --- TRIGGER PRINT ---
         worker_name = call.from_user.full_name or call.from_user.username or str(db_user.tg_id)
-        
+
         from datetime import datetime
         print_data = {
             "order_id": order_group_id,
@@ -334,11 +336,11 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
             "total_amount": float(total_rub),
             "currency": "UZS"
         }
-        
+
         from app.api.printer_manager import PrinterConnectionManager
         printer_manager: PrinterConnectionManager = container.get("printer_manager")
         print_sent = await printer_manager.send_print_job(print_data)
-        
+
         # Notify admin
         alert_text = (
             f"💰 <b>Yangi sotuv (Chek)!</b>\n\n"
@@ -348,7 +350,7 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
             f"Summa: <b>{total_rub:,}</b> so'm\n"
             f"Xodim: <b>{worker_name}</b>"
         )
-        
+
         # Critical Stock Check for all products
         try:
             product_service: ProductService = container.get("product_service")
@@ -358,15 +360,15 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
                     alert_text += f"\n\n⚠️ <b>Kritik qoldiq</b>\nOmborda {prod_after.name}: {prod_after.quantity} dona!"
         except Exception:
             logger.exception("Error checking critical stock")
-        
+
         # Статус печати для админа
         if print_sent:
             alert_text += "\n\n🖨️ <i>Chek printerga yuborildi.</i>"
         else:
             alert_text += "\n\n⚠️ <i>Printer ulanmagan. Chekni qo'lda chop etish mumkin.</i>"
-                
+
         try:
-            from app.telegram.keyboards.admin import undo_and_print_kb, print_retry_kb
+            from app.telegram.keyboards.admin import undo_and_print_kb
             admin_ids = [int(x.strip()) for x in settings.ADMIN_IDS.split(",") if x.strip().isdigit()]
             for admin_id in admin_ids:
                 try:
@@ -376,10 +378,10 @@ async def cart_checkout(call: types.CallbackQuery, state: FSMContext, container:
                     pass
         except Exception:
             pass
-        
+
         # Не отправляем отдельного сообщения "Tanlang:" — нижнее меню уже на месте!
         await state.clear()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cart_checkout")
         try:
             await call.message.edit_text("⚠️ Rasmiylashtirishda xatolik yuz berdi. Qaytadan urinib ko'ring.")
@@ -393,31 +395,31 @@ async def worker_stats(message: types.Message, container: Container, db_user: Us
     try:
         transaction_service: TransactionService = container.get("transaction_service")
         sales = await transaction_service.get_worker_sales_today(user_id=db_user.id)
-        
+
         if not sales:
             await message.answer("Bugun hali sotuvlar amalga oshirilmadi.")
             return
-            
+
         total_items = sum(t.amount for t in sales)
         total_money = sum(t.total_price for t in sales)
-        
-        text = f"📈 <b>Bugungi savdo ko'rsatkichlaringiz:</b>\n\n"
+
+        text = "📈 <b>Bugungi savdo ko'rsatkichlaringiz:</b>\n\n"
         sales_list = []
         for t in sales:
             product_name = t.product.name if t.product else "O'chirilgan mahsulot"
             sales_list.append(f"• <b>{product_name}</b> <i>({t.amount} dona)</i> — {t.total_price:,} so'm")
-            
+
         text += f"<blockquote>{chr(10).join(sales_list)}</blockquote>\n"
         text += f"<b>Jami:</b> {total_items} ta mahsulot, {total_money:,} so'm.\n"
-        
+
         if db_user.kpi > 0:
             progress_bar = kpi_progress_bar(total_money, db_user.kpi)
-            text += f"\n🎯 <b>Kunlik reja (KPI):</b>\n"
+            text += "\n🎯 <b>Kunlik reja (KPI):</b>\n"
             text += f"• Reja: <b>{db_user.kpi:,}</b> so'm\n"
             text += f"• Bajarildi: <b>{total_money:,}</b> so'm\n\n"
             text += f"{progress_bar}\n"
-        
+
         await message.answer(text, parse_mode="HTML")
-    except Exception as e:
+    except Exception:
         logger.exception("Error in worker_stats")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")

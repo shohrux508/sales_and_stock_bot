@@ -1,8 +1,9 @@
-from sqlalchemy.ext.asyncio import async_sessionmaker
+import logging
+from collections.abc import Sequence
+
 from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Sequence
-import logging
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.database.models import User, UserRole
 
@@ -19,7 +20,7 @@ class UserService:
                 stmt = select(User).where(User.tg_id == tg_id)
                 result = await session.execute(stmt)
                 user = result.scalar_one_or_none()
-                
+
                 created = False
                 if not user:
                     logger.info(f"Creating new user {tg_id} with role {default_role.name}")
@@ -28,9 +29,9 @@ class UserService:
                     await session.commit()
                     await session.refresh(user)
                     created = True
-                
+
                 return user, created
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in get_or_create_user({tg_id})")
             return None, False
 
@@ -40,7 +41,7 @@ class UserService:
                 stmt = select(User).where(User.tg_id == tg_id)
                 result = await session.execute(stmt)
                 return result.scalar_one_or_none()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in get_user_by_tg_id({tg_id})")
             return None
 
@@ -50,10 +51,10 @@ class UserService:
                 stmt = select(User).order_by(User.id)
                 result = await session.execute(stmt)
                 return result.scalars().all()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception("DB error in get_all_users")
             return []
-            
+
     async def update_user_role(self, tg_id: int, role: UserRole) -> User | None:
         try:
             async with self.session_maker() as session:
@@ -61,7 +62,7 @@ class UserService:
                 result = await session.execute(stmt)
                 await session.commit()
                 return result.scalar_one_or_none()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in update_user_role({tg_id}, {role})")
             return None
 
@@ -69,10 +70,13 @@ class UserService:
         try:
             async with self.session_maker() as session:
                 update_data = {}
-                if full_name is not None: update_data["full_name"] = full_name
-                if phone is not None: update_data["phone"] = phone
-                if is_active is not None: update_data["is_active"] = 1 if is_active else 0
-                
+                if full_name is not None:
+                    update_data["full_name"] = full_name
+                if phone is not None:
+                    update_data["phone"] = phone
+                if is_active is not None:
+                    update_data["is_active"] = 1 if is_active else 0
+
                 if not update_data:
                     # Nothing to update, just fetch
                     stmt = select(User).where(User.tg_id == tg_id)
@@ -83,7 +87,7 @@ class UserService:
                 result = await session.execute(stmt)
                 await session.commit()
                 return result.scalar_one_or_none()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in update_user_profile({tg_id})")
             return None
 
@@ -94,6 +98,6 @@ class UserService:
                 result = await session.execute(stmt)
                 await session.commit()
                 return result.scalar_one_or_none()
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             logger.exception(f"DB error in update_user_kpi({tg_id}, {kpi})")
             return None

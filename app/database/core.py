@@ -1,14 +1,13 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+import os
+
+from sqlalchemy import MetaData
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
 from app.config import settings
 
-from sqlalchemy import MetaData
-
-import os
-
-# Construct Database URL. 
-# Railway and other providers often provide postgresql:// URLs, 
+# Construct Database URL.
+# Railway and other providers often provide postgresql:// URLs,
 # but we need postgresql+asyncpg:// for async SQLAlchemy.
 DATABASE_URL = os.getenv("DATABASE_URL") or settings.DATABASE_URL
 if not DATABASE_URL:

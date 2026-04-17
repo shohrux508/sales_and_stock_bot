@@ -1,28 +1,90 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+env:
+  DOCKER_IMAGE: sales-stock-bot
 
 jobs:
-  test:
+  # ═══════════════════════════════════════════════════════════
+  # CI — Проверка качества кода
+  # ═══════════════════════════════════════════════════════════
+  ci:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.12"
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        
-    - name: Run Pytest
-      run: |
-        python -m pytest --cov=app tests/
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ── Линтинг ──────────────────────────────────────────
+      - name: Ruff Lint
+        run: ruff check app/
+
+      - name: Ruff Format Check
+        run: ruff format --check app/
+
+      # ── Типизация ────────────────────────────────────────
+      - name: MyPy Type Check
+        run: mypy app/
+
+      # ── Security: поиск забытых секретов в коде ──────────
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+      # ── Security: аудит зависимостей на CVE ──────────────
+      - name: Pip Audit
+        run: pip-audit -r requirements.txt
+
+      # ── Тесты с проверкой покрытия ───────────────────────
+      - name: Run Tests
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          BOT_TOKEN: "test:token"
+          ADMIN_IDS: "123"
+        run: |
+          python -m pytest --cov=app --cov-fail-under=49 tests/
+          # TODO: Поднять порог покрытия до 80% после добавления тестов
+
+  # ═══════════════════════════════════════════════════════════
+  # CD — Сборка Docker-образа и деплой на Railway
+  # Запускается ТОЛЬКО после успешного CI и ТОЛЬКО на main
+  # ═══════════════════════════════════════════════════════════
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Сборка Docker-образа с уникальным тегом (для отката) ──
+      - name: Build Docker Image
+        run: |
+          docker build -t $DOCKER_IMAGE:${{ github.sha }} .
+          docker tag $DOCKER_IMAGE:${{ github.sha }} $DOCKER_IMAGE:latest
+
+      # ── Деплой на Railway ────────────────────────────────
+      # Миграции Alembic выполняются автоматически через entrypoint.sh
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --detach

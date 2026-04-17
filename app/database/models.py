@@ -1,10 +1,13 @@
 import enum
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from decimal import Decimal
 
-from sqlalchemy import BigInteger, Integer, String, Float, ForeignKey, DateTime, Enum as SQLEnum
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .core import Base
+
 
 class UserRole(enum.Enum):
     ADMIN = "admin"
@@ -27,7 +30,7 @@ class User(Base):
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), default=UserRole.WORKER)
     kpi: Mapped[int] = mapped_column(Integer, default=0)
-    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     is_active: Mapped[bool] = mapped_column(Integer, default=1) # 1 for True, 0 for False (SQLite compatibility)
 
     # Relationships
@@ -45,8 +48,8 @@ class Category(Base):
         "Product", back_populates="category", cascade="all, delete-orphan"
     )
 
-from decimal import Decimal
-from sqlalchemy import BigInteger, Integer, String, Numeric, ForeignKey, DateTime, Enum as SQLEnum
+
+
 
 class Product(Base):
     __tablename__ = "products"
@@ -74,8 +77,8 @@ class Transaction(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     total_price: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
     type: Mapped[TransactionType] = mapped_column(SQLEnum(TransactionType), default=TransactionType.SALE)
     reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     order_group_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)

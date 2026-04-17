@@ -1,27 +1,33 @@
-from aiogram import Router, types, F
-from aiogram.fsm.context import FSMContext
-from app.database.models import User, UserRole
-from app.container import Container
-
-from app.services.product_service import ProductService
-from app.services.user_service import UserService
-from app.services.category_service import CategoryService
-from app.services.transaction_service import TransactionService
-
-from app.telegram.states.admin import AddProductState, AddCategoryState, EditCategoryState, WaitAdminReply, EditStaffProfileState
-from app.telegram.keyboards.admin import (
-    main_admin_kb, 
-    products_list_kb, 
-    cancel_kb,
-    cancel_admin_inline_kb,
-    product_edit_kb, 
-    categories_list_kb, 
-    approve_user_kb,
-    stats_periods_kb,
-    undo_tx_kb
-)
-
 import logging
+
+from aiogram import F, Router, types
+from aiogram.fsm.context import FSMContext
+
+from app.container import Container
+from app.database.models import User, UserRole
+from app.services.category_service import CategoryService
+from app.services.product_service import ProductService
+from app.services.transaction_service import TransactionService
+from app.services.user_service import UserService
+from app.telegram.keyboards.admin import (
+    cancel_admin_inline_kb,
+    categories_list_kb,
+    main_admin_kb,
+    product_edit_kb,
+    products_list_kb,
+    stats_periods_kb,
+)
+from app.telegram.keyboards.worker import sell_product_list_kb, worker_categories_kb
+from app.telegram.states.admin import (
+    AddCategoryState,
+    AddProductState,
+    BindBarcodeState,
+    EditCategoryState,
+    EditStaffKPIState,
+    EditStaffProfileState,
+    ReceiptState,
+    WriteOffState,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +45,13 @@ async def show_stock(message: types.Message, container: Container):
     try:
         product_service: ProductService = container.get("product_service")
         products = await product_service.get_all_products()
-        
+
         if not products:
             await message.answer("Ombor bo'sh.", reply_markup=products_list_kb(products))
             return
-            
+
         await message.answer("📦 OMBORDAGI MAHSULOTLAR RO'YXATI:", reply_markup=products_list_kb(products))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in show_stock")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
@@ -55,7 +61,7 @@ async def cb_back_to_stock(call: types.CallbackQuery, container: Container):
         product_service: ProductService = container.get("product_service")
         products = await product_service.get_all_products()
         await call.message.edit_text("📦 OMBORDAGI MAHSULOTLAR RO'YXATI:", reply_markup=products_list_kb(products))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_back_to_stock")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -66,7 +72,7 @@ async def cb_stock_page(call: types.CallbackQuery, container: Container):
         product_service: ProductService = container.get("product_service")
         products = await product_service.get_all_products()
         await call.message.edit_text("📦 OMBORDAGI MAHSULOTLAR RO'YXATI:", reply_markup=products_list_kb(products, page=page))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_stock_page")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -94,12 +100,12 @@ async def show_categories(message: types.Message, container: Container):
         from app.telegram.keyboards.admin import categories_list_kb
         category_service: CategoryService = container.get("category_service")
         categories = await category_service.get_all_categories()
-        
+
         if not categories:
             await message.answer("Kategoriyalar hozircha yo'q. Ularni qo'shishingiz mumkin.", reply_markup=categories_list_kb([]))
         else:
             await message.answer("Kategoriyalarni boshqarish:", reply_markup=categories_list_kb(categories))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in show_categories")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
@@ -115,17 +121,17 @@ async def process_add_category_name(message: types.Message, state: FSMContext, c
         from sqlalchemy.exc import IntegrityError
         category_name = message.text.strip()
         category_service: CategoryService = container.get("category_service")
-        
+
         try:
             await category_service.create_category(category_name)
             await message.answer(f"✅ '{category_name}' kategoriyasi muvaffaqiyatli yaratildi!", reply_markup=main_admin_kb())
         except IntegrityError:
             await message.answer("❌ Bunday nomli kategoriya allaqachon mavjud.", reply_markup=main_admin_kb())
-        except Exception as e:
-            await message.answer(f"❌ Xatolik yuz berdi.", reply_markup=main_admin_kb())
+        except Exception:
+            await message.answer("❌ Xatolik yuz berdi.", reply_markup=main_admin_kb())
         finally:
             await state.clear()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_add_category_name")
         await state.clear()
         await message.answer("⚠️ Xatolik yuz berdi.", reply_markup=main_admin_kb())
@@ -136,7 +142,7 @@ async def cb_category_list(call: types.CallbackQuery, container: Container):
         category_service: CategoryService = container.get("category_service")
         categories = await category_service.get_all_categories()
         await call.message.edit_text("Kategoriyalarni boshqarish:", reply_markup=categories_list_kb(categories))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_category_list")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -151,13 +157,13 @@ async def cb_category_page(call: types.CallbackQuery, container: Container):
         else:
             page = int(parts[2])
             for_selection = False
-            
+
         category_service: CategoryService = container.get("category_service")
         categories = await category_service.get_all_categories()
-        
+
         text = "Yangi mahsulot uchun kategoriya tanlang:" if for_selection else "Kategoriyalarni boshqarish:"
         await call.message.edit_text(text, reply_markup=categories_list_kb(categories, for_selection=for_selection, page=page))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_category_page")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -182,7 +188,7 @@ async def cb_manage_category(call: types.CallbackQuery, container: Container):
         from app.telegram.keyboards.admin import category_manage_kb
 
         await call.message.edit_text(text, parse_mode="HTML", reply_markup=category_manage_kb(cat_id))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_manage_category")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -212,7 +218,7 @@ async def process_category_rename(message: types.Message, state: FSMContext, con
             await message.answer(f"✅ Kategoriya nomi yangilandi: <b>{name}</b>", parse_mode="HTML", reply_markup=main_admin_kb())
         else:
             await message.answer("❌ Kategoriya topilmadi yoki nom bo'sh.", reply_markup=main_admin_kb())
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_category_rename")
         await state.clear()
         await message.answer("⚠️ Xatolik yuz berdi.", reply_markup=main_admin_kb())
@@ -237,7 +243,7 @@ async def cb_category_delete_confirm(call: types.CallbackQuery, container: Conta
             parse_mode="HTML",
             reply_markup=category_delete_confirm_kb(cat_id),
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_category_delete_confirm")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -256,7 +262,7 @@ async def cb_category_delete_yes(call: types.CallbackQuery, container: Container
                 "Xatolik: kategoriya topilmadi.",
                 show_alert=True,
             )
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_category_delete_yes")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -268,14 +274,14 @@ async def start_add_product(call: types.CallbackQuery, state: FSMContext, contai
         from app.telegram.keyboards.admin import categories_list_kb
         category_service: CategoryService = container.get("category_service")
         categories = await category_service.get_all_categories()
-        
+
         if not categories:
             await call.answer("Avvalo kategoriya yarating (🗂 Kategoriyalar)!", show_alert=True)
             return
-            
+
         await state.set_state(AddProductState.category_id)
         await call.message.edit_text("Yangi mahsulot uchun kategoriya tanlang:", reply_markup=categories_list_kb(categories, for_selection=True))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in start_add_product")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -299,7 +305,7 @@ async def process_product_price(message: types.Message, state: FSMContext):
     except ValueError:
         await message.answer("Iltimos, narx uchun to'g'ri raqam kiriting.")
         return
-        
+
     await state.update_data(price=price)
     await message.answer("Ombordagi boshlang'ich miqdorni kiriting:")
     await state.set_state(AddProductState.initial_quantity)
@@ -312,19 +318,19 @@ async def process_product_quantity(message: types.Message, state: FSMContext, co
         except ValueError:
             await message.answer("Iltimos, butun son kiriting.")
             return
-            
+
         data = await state.get_data()
         product_service: ProductService = container.get("product_service")
-        
+
         try:
             cat_id = data.get("category_id")
             await product_service.create_product(name=data['name'], price=data['price'], quantity=qty, category_id=cat_id)
             await message.answer(f"✅ '{data['name']}' mahsuloti qo'shildi!", reply_markup=main_admin_kb())
-        except Exception as e:
+        except Exception:
             await message.answer("❌ MBga qo'shishda xatolik. Ehtimol bunday nomdagi mahsulot mavjud.", reply_markup=main_admin_kb())
-            
+
         await state.clear()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_product_quantity")
         await state.clear()
         await message.answer("⚠️ Xatolik yuz berdi.", reply_markup=main_admin_kb())
@@ -336,12 +342,12 @@ async def cb_edit_product(call: types.CallbackQuery, container: Container):
     try:
         product_id = int(call.data.split("_")[2])
         product_service: ProductService = container.get("product_service")
-        
+
         product = await product_service.get_product_by_id(product_id)
         if product:
             text = f"📦 <b>Mahsulot:</b> {product.name}\nNarx: {product.price:,} so'm\nQoldiq: <b>{product.quantity}</b> dona"
             await call.message.edit_text(text, parse_mode="HTML", reply_markup=product_edit_kb(product_id))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_edit_product")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -350,14 +356,14 @@ async def cb_inc_product(call: types.CallbackQuery, container: Container):
     try:
         product_id = int(call.data.split("_")[2])
         product_service: ProductService = container.get("product_service")
-        
+
         product = await product_service.update_quantity(product_id, 1)
         if product:
             text = f"📦 <b>Mahsulot:</b> {product.name}\nNarx: {product.price:,} so'm\nQoldiq: <b>{product.quantity}</b> dona"
             await call.message.edit_text(text, parse_mode="HTML", reply_markup=product_edit_kb(product_id))
         else:
             await call.answer("Mahsulot topilmadi", show_alert=True)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_inc_product")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -366,7 +372,7 @@ async def cb_dec_product(call: types.CallbackQuery, container: Container):
     try:
         product_id = int(call.data.split("_")[2])
         product_service: ProductService = container.get("product_service")
-        
+
         # Check if quantity > 0
         product = await product_service.get_product_by_id(product_id)
         if product and product.quantity > 0:
@@ -375,7 +381,7 @@ async def cb_dec_product(call: types.CallbackQuery, container: Container):
             await call.message.edit_text(text, parse_mode="HTML", reply_markup=product_edit_kb(product_id))
         else:
             await call.answer("Kamaytirib bo'lmaydi (qoldiq 0 yoki mahsulot topilmadi)", show_alert=True)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_dec_product")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -388,7 +394,7 @@ async def cb_delete_product_conf(call: types.CallbackQuery, container: Container
         product = await product_service.get_product_by_id(product_id)
         if product:
             await call.message.edit_text(f"⚠️ <b>{product.name}</b> mahsulotini o'chirishga ishonchingiz komilmi?\nBu amalni ortga qaytarib bo'lmaydi.", parse_mode="HTML", reply_markup=product_delete_confirm_kb(product_id))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_delete_product_conf")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -397,7 +403,7 @@ async def cb_delete_product_yes(call: types.CallbackQuery, container: Container)
     try:
         product_id = int(call.data.split("_")[3])
         product_service: ProductService = container.get("product_service")
-        
+
         success = await product_service.delete_product(product_id)
         if success:
             await call.answer("Mahsulot o'chirildi", show_alert=True)
@@ -405,7 +411,7 @@ async def cb_delete_product_yes(call: types.CallbackQuery, container: Container)
             await call.message.edit_text("📦 Ombordagi mahsulotlar ro'yxati:", reply_markup=products_list_kb(products))
         else:
             await call.answer("O'chirishda xatolik", show_alert=True)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_delete_product_yes")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -420,7 +426,7 @@ async def cb_approve_user(call: types.CallbackQuery, container: Container):
     try:
         user_id = int(call.data.split("_")[1])
         user_service: UserService = container.get("user_service")
-        
+
         updated_user = await user_service.update_user_role(user_id, UserRole.WORKER)
         if updated_user:
             await call.message.edit_text(f"✅ @{updated_user.username or user_id} foydalanuvchisi ruxsat oldi (WORKER).")
@@ -430,7 +436,7 @@ async def cb_approve_user(call: types.CallbackQuery, container: Container):
                 pass
         else:
             await call.answer("Rolni yangilashda xatolik", show_alert=True)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_approve_user")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -439,13 +445,13 @@ async def cb_reject_user(call: types.CallbackQuery, container: Container):
     try:
         user_id = int(call.data.split("_")[1])
         user_service: UserService = container.get("user_service")
-        
+
         updated_user = await user_service.update_user_role(user_id, UserRole.BANNED)
         if updated_user:
             await call.message.edit_text(f"⛔ @{updated_user.username or user_id} foydalanuvchi rad etildi (BANNED).")
         else:
             await call.answer("Rolni yangilashda xatolik", show_alert=True)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_reject_user")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -454,11 +460,11 @@ async def cb_reject_user(call: types.CallbackQuery, container: Container):
 async def show_staff(message: types.Message, container: Container):
     try:
         user_service: UserService = container.get("user_service")
-        
+
         users = await user_service.get_all_users()
         # List Workers, Pending, and BANNED to make management easier
         workers = [u for u in users if u.role in [UserRole.WORKER, UserRole.PENDING, UserRole.BANNED]]
-        
+
         if not workers:
             text = "Xodimlar va so'rovlar hozircha yo'q."
             await message.answer(text, reply_markup=main_admin_kb())
@@ -466,7 +472,7 @@ async def show_staff(message: types.Message, container: Container):
             from app.telegram.keyboards.admin import staff_list_kb
             text = "👥 Boshqarish uchun xodim yoki nomzodni tanlang:"
             await message.answer(text, reply_markup=staff_list_kb(workers))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in show_staff")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
@@ -476,16 +482,16 @@ async def cb_staff_list(call: types.CallbackQuery, container: Container):
         user_service: UserService = container.get("user_service")
         users = await user_service.get_all_users()
         workers = [u for u in users if u.role in [UserRole.WORKER, UserRole.PENDING, UserRole.BANNED]]
-        
+
         if not workers:
             await call.message.edit_text("Xodimlar va so'rovlar hozircha yo'q.", reply_markup=None)
             return
-            
+
         from app.telegram.keyboards.admin import staff_list_kb
         text = "👥 Boshqarish uchun xodim yoki nomzodni tanlang:"
         await call.message.edit_text(text, reply_markup=staff_list_kb(workers))
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_staff_list")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -496,11 +502,11 @@ async def cb_staff_page(call: types.CallbackQuery, container: Container):
         user_service: UserService = container.get("user_service")
         users = await user_service.get_all_users()
         workers = [u for u in users if u.role in [UserRole.WORKER, UserRole.PENDING, UserRole.BANNED]]
-        
+
         from app.telegram.keyboards.admin import staff_list_kb
         text = "👥 Boshqarish uchun xodim yoki nomzodni tanlang:"
         await call.message.edit_text(text, reply_markup=staff_list_kb(workers, page=page))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_staff_page")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -515,27 +521,27 @@ async def cb_staff_profile(call: types.CallbackQuery, container: Container):
         if not user:
             await call.answer("Foydalanuvchi topilmadi.", show_alert=True)
             return
-            
-        from app.telegram.keyboards.admin import staff_profile_kb
-        
-        from app.telegram.keyboards.worker import kpi_progress_bar
+
         import html
-        
+
+        from app.telegram.keyboards.admin import staff_profile_kb
+        from app.telegram.keyboards.worker import kpi_progress_bar
+
         # Calculate current progress for KPI
         transaction_service: TransactionService = container.get("transaction_service")
         stats_today = await transaction_service.get_admin_statistics("today", user_id=user.id)
         revenue_today = sum(t.total_price for t in stats_today)
-        
+
         status = "✅ Faol" if user.is_active else "⛔ Bloklangan"
         if user.role == UserRole.PENDING:
             status = "⏳ Tasdiqlash kutilmoqda"
-            
+
         kpi_bar = kpi_progress_bar(revenue_today, user.kpi) if user.kpi > 0 else "🎯 KPI belgilanmagan"
-        
+
         username = html.escape(user.username) if user.username else "---"
         full_name = html.escape(user.full_name) if user.full_name else "---"
         phone = html.escape(user.phone) if user.phone else "---"
-        
+
         text = (
             f"👤 <b>Profil:</b> {full_name}\n\n"
             f"<blockquote>• ID: <code>{user.tg_id}</code>\n"
@@ -550,9 +556,9 @@ async def cb_staff_profile(call: types.CallbackQuery, container: Container):
             f"{kpi_bar}\n\n"
             f"Amalni tanlang:"
         )
-        
+
         await call.message.edit_text(text, parse_mode="HTML", reply_markup=staff_profile_kb(tg_id, user.role))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_staff_profile")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -570,9 +576,9 @@ async def process_edit_staff_name(message: types.Message, state: FSMContext, con
         tg_id = data.get("target_tg_id")
         user_service: UserService = container.get("user_service")
         await user_service.update_user_profile(tg_id, full_name=message.text.strip())
-        await message.answer(f"✅ F.I.Sh yangilandi!", reply_markup=main_admin_kb())
+        await message.answer("✅ F.I.Sh yangilandi!", reply_markup=main_admin_kb())
         await state.clear()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_edit_staff_name")
         await state.clear()
         await message.answer("⚠️ Xatolik yuz berdi.", reply_markup=main_admin_kb())
@@ -591,14 +597,15 @@ async def process_edit_staff_phone(message: types.Message, state: FSMContext, co
         tg_id = data.get("target_tg_id")
         user_service: UserService = container.get("user_service")
         await user_service.update_user_profile(tg_id, phone=message.text.strip())
-        await message.answer(f"✅ Telefon yangilandi!", reply_markup=main_admin_kb())
+        await message.answer("✅ Telefon yangilandi!", reply_markup=main_admin_kb())
         await state.clear()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_edit_staff_phone")
         await state.clear()
         await message.answer("⚠️ Xatolik yuz berdi.", reply_markup=main_admin_kb())
 
-from app.telegram.states.admin import EditStaffKPIState
+
+
 
 @router.callback_query(F.data.startswith("staff_edit_kpi_"))
 async def cb_staff_edit_kpi(call: types.CallbackQuery, state: FSMContext):
@@ -615,18 +622,18 @@ async def process_edit_staff_kpi(message: types.Message, state: FSMContext, cont
         except ValueError:
             await message.answer("Iltimos, butun son kiriting.")
             return
-            
+
         data = await state.get_data()
         tg_id = data.get("target_tg_id")
         user_service: UserService = container.get("user_service")
-        
+
         updated_user = await user_service.update_user_kpi(tg_id, new_kpi)
         if updated_user:
             await message.answer(f"✅ KPI muvaffaqiyatli {new_kpi} gacha yangilandi!", reply_markup=main_admin_kb())
         else:
             await message.answer("❌ KPI yangilashda xatolik.", reply_markup=main_admin_kb())
         await state.clear()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_edit_staff_kpi")
         await state.clear()
         await message.answer("⚠️ Xatolik yuz berdi.", reply_markup=main_admin_kb())
@@ -636,17 +643,17 @@ async def cb_staff_revoke(call: types.CallbackQuery, container: Container):
     try:
         tg_id = int(call.data.split("_")[2])
         user_service: UserService = container.get("user_service")
-        
+
         updated_user = await user_service.update_user_role(tg_id, UserRole.BANNED)
         if updated_user:
-            await call.message.edit_text(f"🗑 Xodim faol ro'yxatdan o'chirildi. (Uni qaytarish uchun u /start bosishi kerak)")
+            await call.message.edit_text("🗑 Xodim faol ro'yxatdan o'chirildi. (Uni qaytarish uchun u /start bosishi kerak)")
             try:
                 await call.bot.send_message(tg_id, "Profilingiz administrator tomonidan o'chirildi. Ruxsatingiz yopilgan.")
-            except:
+            except Exception:
                 pass
         else:
             await call.answer("Xatolik", show_alert=True)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_staff_revoke")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -656,37 +663,38 @@ async def cb_staff_export_excel(call: types.CallbackQuery, container: Container)
         parts = call.data.split("_")
         period = parts[2]
         tg_id = int(parts[3])
-        
+
         transaction_service: TransactionService = container.get("transaction_service")
         user_service: UserService = container.get("user_service")
-        
+
         user = await user_service.get_user_by_tg_id(tg_id)
         user_pk_id = user.id if user else None
         if not user_pk_id:
             await call.answer("Foydalanuvchi topilmadi.", show_alert=True)
             return
-            
+
         transactions = await transaction_service.get_admin_statistics(period, user_id=user_pk_id)
         if not transactions:
             await call.answer("Bu davrda tranzaksiyalar yo'q", show_alert=True)
             return
-            
-        import openpyxl
-        from aiogram.types import BufferedInputFile
+
         import io
         from datetime import datetime
-        
+
+        import openpyxl
+        from aiogram.types import BufferedInputFile
+
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = f"Sotuvlar"
-        
+        ws.title = "Sotuvlar"
+
         headers = ["Chek ID", "Sana/Vaqt (UTC)", "Kategoriya", "Mahsulot", "Miqdor", "Summa (so'm)"]
         ws.append(headers)
-        
+
         for t in transactions:
             prod_name = t.product.name if t.product else "O'chirilgan"
             cat_name = t.product.category.name if getattr(t.product, 'category', None) else "Ko'rsatilmagan"
-            
+
             row = [
                 t.id,
                 t.timestamp.strftime("%Y-%m-%d %H:%M:%S") if t.timestamp else "",
@@ -696,17 +704,17 @@ async def cb_staff_export_excel(call: types.CallbackQuery, container: Container)
                 t.total_price
             ]
             ws.append(row)
-            
+
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        
+
         file_name = f"Report_Staff_{user.username or tg_id}_{period}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         file = BufferedInputFile(buf.read(), filename=file_name)
-        
+
         await call.message.answer_document(document=file, caption=f"📥 @{user.username or tg_id} xodimi bo'yicha hisobot tayyor!")
         await call.answer()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_staff_export_excel")
         await call.answer("⚠️ Hisobot tayyorlashda xatolik.", show_alert=True)
 
@@ -722,49 +730,49 @@ async def process_stats(call: types.CallbackQuery, container: Container):
     try:
         period = call.data.split("_")[2] # "today" or "week"
         transaction_service: TransactionService = container.get("transaction_service")
-        
+
         transactions = await transaction_service.get_admin_statistics(period)
-        
+
         if not transactions:
             await call.answer("Bu davrda sotuvlar bo'lmagan.", show_alert=True)
             return
-            
+
         total_sales = len(transactions)
         total_items = sum(t.amount for t in transactions)
         total_revenue = sum(t.total_price for t in transactions)
-        
+
         # Simple top 3 calculation
         from collections import defaultdict
         product_sales = defaultdict(lambda: {"count": 0, "revenue": 0})
-        
+
         for t in transactions:
             p_name = t.product.name if t.product else f"Mahsulot {t.product_id} (o'chirilgan)"
             product_sales[p_name]["count"] += t.amount
             product_sales[p_name]["revenue"] += t.total_price
-            
+
         top_products = sorted(product_sales.items(), key=lambda x: x[1]['count'], reverse=True)[:3]
-        
+
         # Staff rankings
         rankings = await transaction_service.get_staff_rankings(period)
-        
+
         if period == "today":
             period_str = "bugun"
         elif period == "month":
             period_str = "so'nggi 30 kun"
         else:
             period_str = "so'nggi 7 kun"
-        
+
         text = f"📊 <b>{period_str.capitalize()} statistikasi:</b>\n\n"
         text += f"Jami cheklar: <b>{total_sales}</b>\n"
         text += f"Sotilgan mahsulotlar: <b>{total_items}</b> dona.\n"
         text += f"Umumiy daromad: <b>{total_revenue:,} so'm.</b>\n\n"
-        
+
         text += "🏆 <b>Eng ko'p sotilgan Top-3 mahsulot:</b>\n"
         text += "<blockquote>"
         for rank, (p_name, stats) in enumerate(top_products, 1):
             text += f"{rank}. <b>{p_name}</b> — {stats['count']} dona. (<i>{stats['revenue']:,} so'm</i>)\n"
         text += "</blockquote>"
-            
+
         if rankings:
             text += "\n👥 <b>Xodimlar reytingi:</b>\n"
             text += "<blockquote>"
@@ -772,9 +780,9 @@ async def process_stats(call: types.CallbackQuery, container: Container):
                 name = rank.username or f"ID {rank.tg_id}"
                 text += f"{i}. <b>@{name}</b> — {rank.revenue:,} so'm. (<i>{rank.items} dona.</i>)\n"
             text += "</blockquote>"
-                
+
         await call.message.edit_text(text, parse_mode="HTML", reply_markup=stats_periods_kb())
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_stats")
         await call.answer("⚠️ Statistikani yuklashda xatolik.", show_alert=True)
 
@@ -784,7 +792,7 @@ async def cb_undo_tx(call: types.CallbackQuery, container: Container):
     try:
         tx_id = int(call.data.split("_")[2])
         transaction_service: TransactionService = container.get("transaction_service")
-        
+
         success = await transaction_service.rollback_transaction(tx_id)
         if success:
             # Edit the original alert message
@@ -793,7 +801,7 @@ async def cb_undo_tx(call: types.CallbackQuery, container: Container):
             new_text = f"❌ <b>Tranzaksiya bekor qilindi. Mahsulot omborga qaytarildi.</b>\n\n<s>{original_text}</s>"
             await call.message.edit_text(new_text, parse_mode="HTML")
             await call.answer("Qaytarish rasmiylashtirildi!", show_alert=True)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_undo_tx")
         await call.answer("⚠️ Tranzaksiya bekor qilishda xatolik.", show_alert=True)
 
@@ -803,20 +811,20 @@ async def cb_print_receipt(call: types.CallbackQuery, container: Container):
     """Обработчик кнопки печати/повторной печати чека."""
     try:
         order_id = call.data.split("print_receipt_")[1]
-        
+
         from app.api.printer_manager import PrinterConnectionManager
         printer_manager: PrinterConnectionManager = container.get("printer_manager")
-        
+
         if not printer_manager.has_connected_printer:
             await call.answer(
                 "⚠️ Printer hozirda ulanmagan! Printerni yoqing va qayta urinib ko'ring.",
                 show_alert=True
             )
             return
-        
+
         # Попытка повторной печати из очереди
         success = await printer_manager.retry_print_job(order_id)
-        
+
         if success:
             await call.answer("✅ Chek printerga yuborildi!", show_alert=True)
             # Обновляем текст сообщения — убираем предупреждение
@@ -828,7 +836,6 @@ async def cb_print_receipt(call: types.CallbackQuery, container: Container):
                 )
                 try:
                     # Сохраняем только кнопку отмены
-                    from app.telegram.keyboards.admin import undo_tx_kb
                     # Извлечь tx_id из кнопок (первая кнопка)
                     kb = call.message.reply_markup
                     await call.message.edit_text(new_text, parse_mode="Markdown", reply_markup=kb)
@@ -839,7 +846,7 @@ async def cb_print_receipt(call: types.CallbackQuery, container: Container):
                 "❌ Chekni topib bo'lmadi yoki printerga yuborishda xatolik.",
                 show_alert=True
             )
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_print_receipt")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -850,29 +857,30 @@ async def cb_export_excel(call: types.CallbackQuery, container: Container):
     try:
         period = call.data.split("_")[2]
         transaction_service: TransactionService = container.get("transaction_service")
-        
+
         transactions = await transaction_service.get_admin_statistics(period)
         if not transactions:
             await call.answer("Bu davrda tranzaksiyalar yo'q", show_alert=True)
             return
-            
-        import openpyxl
-        from aiogram.types import BufferedInputFile
+
         import io
         from datetime import datetime
-        
+
+        import openpyxl
+        from aiogram.types import BufferedInputFile
+
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Sotuvlar"
-        
+
         headers = ["Chek ID", "Sana/Vaqt (UTC)", "Xodim", "Kategoriya", "Mahsulot", "Miqdor", "Summa (so'm)"]
         ws.append(headers)
-        
+
         for t in transactions:
             prod_name = t.product.name if t.product else "O'chirilgan"
             cat_name = t.product.category.name if getattr(t.product, 'category', None) else "Ko'rsatilmagan"
             user_name = t.user.username if t.user and t.user.username else str(t.user_id)
-            
+
             row = [
                 t.id,
                 t.timestamp.strftime("%Y-%m-%d %H:%M:%S") if t.timestamp else "",
@@ -883,17 +891,17 @@ async def cb_export_excel(call: types.CallbackQuery, container: Container):
                 t.total_price
             ]
             ws.append(row)
-            
+
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        
+
         file_name = f"Report_{period}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         file = BufferedInputFile(buf.read(), filename=file_name)
-        
+
         await call.message.answer_document(document=file, caption="📥 Sizning Excel hisobotingiz tayyor!")
         await call.answer()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_export_excel")
         await call.answer("⚠️ Hisobot tayyorlashda xatolik.", show_alert=True)
 
@@ -902,43 +910,43 @@ async def cb_export_inventory_excel(call: types.CallbackQuery, container: Contai
     try:
         product_service: ProductService = container.get("product_service")
         products = await product_service.get_all_products()
-        
+
         if not products:
             await call.answer("Omborda mahsulotlar yo'q.", show_alert=True)
             return
-            
-        import openpyxl
-        from aiogram.types import BufferedInputFile
+
         import io
         from datetime import datetime
-        
+
+        import openpyxl
+        from aiogram.types import BufferedInputFile
+
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Ombor"
-        
+
         headers = ["ID", "Kategoriya", "Nomi", "Narx", "Qoldiq", "Shtrix-kod"]
         ws.append(headers)
-        
+
         for p in products:
             cat_name = p.category.name if p.category else "Kategoriyasiz"
             ws.append([p.id, cat_name, p.name, p.price, p.quantity, p.barcode or ""])
-            
+
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        
+
         file_name = f"Inventory_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         file = BufferedInputFile(buf.read(), filename=file_name)
-        
+
         await call.message.answer_document(document=file, caption="📦 Ombordagi qoldiqlar bo'yicha joriy hisobot tayyor!")
         await call.answer()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in cb_export_inventory_excel")
         await call.answer("⚠️ Hisobot tayyorlashda xatolik.", show_alert=True)
 
 # --- Inventory Management (Receipt & Write-off) ---
-from app.telegram.states.admin import ReceiptState, WriteOffState, BindBarcodeState
-from app.telegram.keyboards.worker import worker_categories_kb, sell_product_list_kb
+
 
 # Receipt Flow
 @router.message(F.text == "📥 Qabul qilish")
@@ -951,7 +959,7 @@ async def start_receipt(message: types.Message, state: FSMContext, container: Co
             return
         await state.set_state(ReceiptState.category_id)
         await message.answer("Qabul qilish uchun kategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in start_receipt")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
@@ -967,7 +975,7 @@ async def receipt_select_cat(call: types.CallbackQuery, state: FSMContext, conta
             return
         await state.set_state(ReceiptState.product_id)
         await call.message.edit_text("Qabul qilish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(products))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in receipt_select_cat")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -983,7 +991,7 @@ async def receipt_select_product(call: types.CallbackQuery, state: FSMContext, c
         await state.update_data(product_id=product_id, product_name=product.name)
         await call.message.edit_text(f"📦 Qabul qilish: <b>{product.name}</b>\nJoriy qoldiq: {product.quantity} dona.\n\nKirim miqdorini kiriting:", parse_mode="HTML", reply_markup=cancel_admin_inline_kb())
         await state.set_state(ReceiptState.quantity)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in receipt_select_product")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -992,7 +1000,8 @@ async def process_receipt_quantity(message: types.Message, state: FSMContext, co
     try:
         try:
             qty = int(message.text)
-            if qty <= 0: raise ValueError()
+            if qty <= 0:
+                raise ValueError()
         except ValueError:
             await message.answer("Musbat son kiriting.")
             return
@@ -1001,7 +1010,7 @@ async def process_receipt_quantity(message: types.Message, state: FSMContext, co
         await transaction_service.create_receipt(user_id=db_user.id, product_id=data['product_id'], amount=qty)
         await message.answer(f"✅ <b>{data['product_name']}</b> mahsulotidan {qty} dona muvaffaqiyatli qabul qilindi.", parse_mode="HTML", reply_markup=main_admin_kb())
         await state.clear()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_receipt_quantity")
         await state.clear()
         await message.answer("⚠️ Xatolik yuz berdi.", reply_markup=main_admin_kb())
@@ -1017,7 +1026,7 @@ async def start_write_off(message: types.Message, state: FSMContext, container: 
             return
         await state.set_state(WriteOffState.category_id)
         await message.answer("Hisobdan chiqarish uchun kategoriyani tanlang:", reply_markup=worker_categories_kb(categories))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in start_write_off")
         await message.answer("⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.")
 
@@ -1034,7 +1043,7 @@ async def write_off_select_cat(call: types.CallbackQuery, state: FSMContext, con
             return
         await state.set_state(WriteOffState.product_id)
         await call.message.edit_text("Hisobdan chiqarish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(available))
-    except Exception as e:
+    except Exception:
         logger.exception("Error in write_off_select_cat")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -1050,7 +1059,7 @@ async def write_off_select_product(call: types.CallbackQuery, state: FSMContext,
         await state.update_data(product_id=product_id, product_name=product.name, max_qty=product.quantity)
         await call.message.edit_text(f"🗑 Hisobdan chiqarish: <b>{product.name}</b>\nMavjud: {product.quantity} dona.\n\nHisobdan chiqarish miqdorini kiriting:", parse_mode="HTML", reply_markup=cancel_admin_inline_kb())
         await state.set_state(WriteOffState.quantity)
-    except Exception as e:
+    except Exception:
         logger.exception("Error in write_off_select_product")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
@@ -1058,7 +1067,8 @@ async def write_off_select_product(call: types.CallbackQuery, state: FSMContext,
 async def process_write_off_quantity(message: types.Message, state: FSMContext):
     try:
         qty = int(message.text)
-        if qty <= 0: raise ValueError()
+        if qty <= 0:
+            raise ValueError()
     except ValueError:
         await message.answer("Musbat son kiriting.")
         return
@@ -1079,7 +1089,7 @@ async def process_write_off_reason(message: types.Message, state: FSMContext, co
         await transaction_service.create_write_off(user_id=db_user.id, product_id=data['product_id'], amount=data['quantity'], reason=reason)
         await message.answer(f"✅ <b>{data['product_name']}</b> mahsulotidan {data['quantity']} dona muvaffaqiyatli hisobdan chiqarildi, sabab: {reason}", parse_mode="HTML", reply_markup=main_admin_kb())
         await state.clear()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_write_off_reason")
         await state.clear()
         await message.answer("⚠️ Xatolik yuz berdi.", reply_markup=main_admin_kb())
@@ -1098,7 +1108,7 @@ async def process_bind_barcode(message: types.Message, state: FSMContext, contai
         barcode = message.text.strip()
         data = await state.get_data()
         product_service: ProductService = container.get("product_service")
-        
+
         existing = await product_service.get_product_by_barcode(barcode)
         if existing and existing.id != data['product_id']:
             if existing.is_active == 0:
@@ -1107,14 +1117,14 @@ async def process_bind_barcode(message: types.Message, state: FSMContext, contai
             else:
                 await message.answer("Bu shtrix-kod boshqa faol mahsulotga biriktirilgan. Boshqasini sinab ko'ring:")
                 return
-            
+
         success = await product_service.update_barcode(data['product_id'], barcode)
         if success:
             await message.answer(f"✅ Shtrix-kod {barcode} muvaffaqiyatli biriktirildi!", reply_markup=main_admin_kb())
         else:
             await message.answer("Shtrix-kod biriktirishda xatolik.", reply_markup=main_admin_kb())
         await state.clear()
-    except Exception as e:
+    except Exception:
         logger.exception("Error in process_bind_barcode")
         await state.clear()
         await message.answer("⚠️ Xatolik yuz berdi.", reply_markup=main_admin_kb())
