@@ -260,6 +260,7 @@ class TestRetryPrint:
         manager_with_redis._redis.lrange.return_value = [json.dumps(order)]
 
         result = await manager_with_redis.retry_print_job("ORD-800")
-
+ 
+ 
         assert result is True
         ws.send_json.assert_called_once_with(order)
