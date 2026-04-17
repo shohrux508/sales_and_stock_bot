@@ -186,7 +186,7 @@ class PrinterConnectionManager:
             logger.warning(f"Принтер не подключен для повторной печати {order_id}")
             return False
 
-        # Пытаемся отправить
+        # Пытаемся отправить это
         for _client_id, ws in self.active_connections.items():
             try:
                 await ws.send_json(job)
