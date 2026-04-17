@@ -106,37 +106,34 @@ class PrinterConnectionManager:
             logger.warning(f"Дубликат чека {order_id} — пропущен")
             return False
 
-        # Попытка отправить на конкретный принтер (по seller_id)
+        # 1. Try sending to the specific seller's printer
         if seller_id and str(seller_id) in self.active_connections:
             ws = self.active_connections[str(seller_id)]
             try:
                 await ws.send_json(order_data)
                 await self._mark_as_printed(order_id)
-                logger.info(f"✅ Чек {order_id} отправлен на принтер продавца {seller_id}")
+                logger.info(f"✅ Чек {order_id} отправлен на целевой принтер продавца {seller_id}")
                 return True
-            except Exception as e:
-                logger.error(f"Ошибка отправки на принтер продавца {seller_id}: {e}")
+            except Exception:
                 self.disconnect(str(seller_id))
-        elif seller_id:
-            logger.warning(f"Принтер продавца {seller_id} не подключен. Чек {order_id} добавлен в очередь.")
-        else:
-            # Fallback (для старых клиентов без seller_id)
-            disconnected = []
-            for client_id, ws in self.active_connections.items():
-                try:
-                    await ws.send_json(order_data)
-                    await self._mark_as_printed(order_id)
-                    logger.info(f"✅ Чек {order_id} отправлен на общий принтер {client_id[:8]}...")
-                    return True
-                except Exception as e:
-                    logger.error(f"Ошибка отправки на общий принтер {client_id[:8]}...: {e}")
-                    disconnected.append(client_id)
 
-            # Очистка отключенных
-            for client_id in disconnected:
-                self.disconnect(client_id)
-            
-            logger.warning(f"Нет общих подключенных принтеров. Чек {order_id} добавлен в очередь.")
+        # 2. 'Dirty Fix': Fallback to ANY connected printer if the specific one is missing.
+        # This allows a single printer client to handle jobs for all sellers.
+        disconnected = []
+        for client_id, ws in self.active_connections.items():
+            try:
+                await ws.send_json(order_data)
+                await self._mark_as_printed(order_id)
+                logger.info(f"✅ Чек {order_id} отправлен на доступный принтер (ID: {client_id[:8]}...)")
+                return True
+            except Exception:
+                disconnected.append(client_id)
+
+        # Cleanup disconnected
+        for client_id in disconnected:
+            self.disconnect(client_id)
+        
+        logger.warning(f"Нет доступных принтеров для чека {order_id}. Добавлено в очередь.")
 
         # Добавляем в очередь, если не удалось напечатать
         await self._add_to_pending(order_data)
