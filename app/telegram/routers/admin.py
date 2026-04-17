@@ -59,6 +59,18 @@ async def cb_back_to_stock(call: types.CallbackQuery, container: Container):
         logger.exception("Error in cb_back_to_stock")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
+@router.callback_query(F.data.startswith("stock_page_"))
+async def cb_stock_page(call: types.CallbackQuery, container: Container):
+    try:
+        page = int(call.data.split("_")[2])
+        product_service: ProductService = container.get("product_service")
+        products = await product_service.get_all_products()
+        await call.message.edit_text("📦 OMBORDAGI MAHSULOTLAR RO'YXATI:", reply_markup=products_list_kb(products, page=page))
+    except Exception as e:
+        logger.exception("Error in cb_stock_page")
+        await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
+
 @router.message(F.text == "Bekor qilish")
 async def cancel_handler(message: types.Message, state: FSMContext):
     await state.clear()
@@ -124,6 +136,28 @@ async def cb_category_list(call: types.CallbackQuery, container: Container):
     except Exception as e:
         logger.exception("Error in cb_category_list")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
+@router.callback_query(F.data.startswith("cat_page"))
+async def cb_category_page(call: types.CallbackQuery, container: Container):
+    try:
+        parts = call.data.split("_")
+        # data format choice: cat_page_{page} or cat_page_sel_{page}
+        if "sel" in parts:
+            page = int(parts[3])
+            for_selection = True
+        else:
+            page = int(parts[2])
+            for_selection = False
+            
+        category_service: CategoryService = container.get("category_service")
+        categories = await category_service.get_all_categories()
+        
+        text = "Yangi mahsulot uchun kategoriya tanlang:" if for_selection else "Kategoriyalarni boshqarish:"
+        await call.message.edit_text(text, reply_markup=categories_list_kb(categories, for_selection=for_selection, page=page))
+    except Exception as e:
+        logger.exception("Error in cb_category_page")
+        await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
 
 @router.callback_query(F.data.startswith("manage_cat_"))
 async def cb_manage_category(call: types.CallbackQuery, container: Container):
@@ -447,9 +481,27 @@ async def cb_staff_list(call: types.CallbackQuery, container: Container):
         from app.telegram.keyboards.admin import staff_list_kb
         text = "👥 Boshqarish uchun xodim yoki nomzodni tanlang:"
         await call.message.edit_text(text, reply_markup=staff_list_kb(workers))
+
     except Exception as e:
         logger.exception("Error in cb_staff_list")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
+@router.callback_query(F.data.startswith("staff_page_"))
+async def cb_staff_page(call: types.CallbackQuery, container: Container):
+    try:
+        page = int(call.data.split("_")[2])
+        user_service: UserService = container.get("user_service")
+        users = await user_service.get_all_users()
+        workers = [u for u in users if u.role in [UserRole.WORKER, UserRole.PENDING, UserRole.BANNED]]
+        
+        from app.telegram.keyboards.admin import staff_list_kb
+        text = "👥 Boshqarish uchun xodim yoki nomzodni tanlang:"
+        await call.message.edit_text(text, reply_markup=staff_list_kb(workers, page=page))
+    except Exception as e:
+        logger.exception("Error in cb_staff_page")
+        await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
+
 
 @router.callback_query(F.data.startswith("staff_profile_"))
 async def cb_staff_profile(call: types.CallbackQuery, container: Container):

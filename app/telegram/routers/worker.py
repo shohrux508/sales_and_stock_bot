@@ -131,9 +131,24 @@ async def process_sell_cat(call: types.CallbackQuery, state: FSMContext, contain
             return
             
         await state.set_state(SellState.product_id)
-        await call.message.edit_text("Sotish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(available_products))
+        await call.message.edit_text("Sotish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(available_products, category_id=cat_id))
     except Exception as e:
         logger.exception("Error in process_sell_cat")
+        await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
+@router.callback_query(F.data.startswith("sell_page_"))
+async def cb_sell_page(call: types.CallbackQuery, container: Container):
+    try:
+        parts = call.data.split("_")
+        cat_id = int(parts[2])
+        page = int(parts[3])
+        
+        product_service: ProductService = container.get("product_service")
+        products = await product_service.get_products_by_category(cat_id)
+        
+        await call.message.edit_text("Sotish uchun mahsulotni tanlang:", reply_markup=sell_product_list_kb(products, category_id=cat_id, page=page))
+    except Exception as e:
+        logger.exception("Error in cb_sell_page")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
 @router.callback_query(F.data == "back_to_w_cats")
@@ -149,6 +164,18 @@ async def process_back_to_w_cats(call: types.CallbackQuery, state: FSMContext, c
         logger.exception("Error in process_back_to_w_cats")
         await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
 
+@router.callback_query(F.data.startswith("w_cat_page_"))
+async def cb_worker_cat_page(call: types.CallbackQuery, container: Container):
+    try:
+        page = int(call.data.split("_")[3])
+        category_service: CategoryService = container.get("category_service")
+        categories = await category_service.get_all_categories()
+        await call.message.edit_text("Kategoriyani tanlang:", reply_markup=worker_categories_kb(categories, page=page))
+    except Exception as e:
+        logger.exception("Error in cb_worker_cat_page")
+        await call.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("sell_"))
 async def process_sell_product(call: types.CallbackQuery, state: FSMContext, container: Container):
     try:
@@ -158,9 +185,14 @@ async def process_sell_product(call: types.CallbackQuery, state: FSMContext, con
         
         if not product or product.quantity == 0:
             await call.answer("Ushbu mahsulot tugagan yoki o'chirilgan.", show_alert=True)
-            products = await product_service.get_all_products()
-            await call.message.edit_reply_markup(reply_markup=sell_product_list_kb(products))
+            # Fetch products for the category to refresh the keyboard
+            data = await state.get_data()
+            cat_id = data.get("category_id")
+            if cat_id:
+                products = await product_service.get_products_by_category(cat_id)
+                await call.message.edit_reply_markup(reply_markup=sell_product_list_kb(products, category_id=cat_id))
             return
+
             
         await state.update_data(product_id=product_id, max_qty=product.quantity, product_name=product.name, price=float(product.price))
         # Редактируем текущее сообщение + inline-отмена (нижнее меню остается!)
