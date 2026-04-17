@@ -112,14 +112,17 @@ async def cb_add_category(call: types.CallbackQuery, state: FSMContext):
 @router.message(AddCategoryState.name)
 async def process_add_category_name(message: types.Message, state: FSMContext, container: Container):
     try:
+        from sqlalchemy.exc import IntegrityError
         category_name = message.text.strip()
         category_service: CategoryService = container.get("category_service")
         
         try:
             await category_service.create_category(category_name)
             await message.answer(f"✅ '{category_name}' kategoriyasi muvaffaqiyatli yaratildi!", reply_markup=main_admin_kb())
+        except IntegrityError:
+            await message.answer("❌ Bunday nomli kategoriya allaqachon mavjud.", reply_markup=main_admin_kb())
         except Exception as e:
-            await message.answer(f"❌ Xatolik: {e}", reply_markup=main_admin_kb())
+            await message.answer(f"❌ Xatolik yuz berdi.", reply_markup=main_admin_kb())
         finally:
             await state.clear()
     except Exception as e:
@@ -1098,8 +1101,12 @@ async def process_bind_barcode(message: types.Message, state: FSMContext, contai
         
         existing = await product_service.get_product_by_barcode(barcode)
         if existing and existing.id != data['product_id']:
-            await message.answer("Bu shtrix-kod boshqa mahsulotga biriktirilgan. Boshqasini sinab ko'ring:")
-            return
+            if existing.is_active == 0:
+                # Soft-deleted product holds this barcode. Free it up.
+                await product_service.update_barcode(existing.id, None)
+            else:
+                await message.answer("Bu shtrix-kod boshqa faol mahsulotga biriktirilgan. Boshqasini sinab ko'ring:")
+                return
             
         success = await product_service.update_barcode(data['product_id'], barcode)
         if success:
