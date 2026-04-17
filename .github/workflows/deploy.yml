@@ -8,6 +8,7 @@ on:
 
 env:
   DOCKER_IMAGE: sales-stock-bot
+  RAILWAY_SERVICE: salesmanager
 
 jobs:
   # ═══════════════════════════════════════════════════════════
@@ -87,4 +88,4 @@ jobs:
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --detach
+        run: railway up --detach --service $RAILWAY_SERVICE
